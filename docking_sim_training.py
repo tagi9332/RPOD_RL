@@ -4,7 +4,6 @@ import numpy as np
 from functools import partial
 import pandas as pd
 from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 # Basilisk Core
 from Basilisk.utilities.orbitalMotion import elem2rv
@@ -31,6 +30,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 bskLogging.setDefaultLogLevel(bskLogging.BSK_WARNING)
 
 
+
 # Define Cheif (RSO) Satellite Class
 class RSOSat(sats.Satellite):
     observation_spec = [
@@ -51,7 +51,7 @@ rso_sat_args = dict(
     batteryStorageCapacity=1e9, # Very large to avoid running out of power
     storedCharge_Init=1e9,
     wheelSpeeds=[0.0, 0.0, 0.0],
-    u_max=1.0,
+    u_max=2.0,
 )
 
 def sun_hat_chief(self, other):
@@ -103,7 +103,7 @@ class InspectorSat(sats.Satellite):
     action_spec = [
         act.ImpulsiveThrustHill(
             chief_name="RSO",
-            max_dv=2.0,
+            max_dv=10.0,
             max_drift_duration=5700.0 * 2,
             fsw_action="action_inspect_rso",
         )
@@ -130,13 +130,13 @@ inspector_sat_args = dict(
     imageRateErrorRequirement=None,
     instrumentBaudRate=1,
     dataStorageCapacity=1e6,
-    batteryStorageCapacity=1e9,
-    storedCharge_Init=1e9,
+    batteryStorageCapacity=1e12,
+    storedCharge_Init=1e12,
     conjunction_radius=2.0,
     dv_available_init=50.0,
     max_range_radius=10000,
     chief_name="RSO",
-    u_max=2.0,
+    u_max=0.01
 )
 
 # Define satellite argument randomizer (Initializes random simulation parameters at each env.reset)
@@ -160,7 +160,7 @@ def sat_arg_randomizer(satellites):
                 inspector.name: lambda: np.concatenate(
                     (
                         random_unit_vector() * np.random.uniform(250, 750),
-                        random_unit_vector() * np.random.uniform(0, 1.0),
+                        random_unit_vector() * np.random.uniform(0, 0.1),
                     )
                 ),
             },
@@ -207,11 +207,12 @@ rewarders = (
         resource_fn=lambda sat: sat.fsw.dv_available
         if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel)
         else 0.0,
-        reward_weight=np.random.uniform(0.0, 0.5),
+        # reward_weight=np.random.uniform(0.0, 0.5),
+        reward_weight=0.001,
     ),
     # Custom relative range log reward
     data.RelativeRangeLogReward(
-        alpha=0.1,
+        alpha=-1,
         delta_x_max=np.array([1000, 1000, 1000, 1, 1, 1]),
     ),
 )
@@ -227,7 +228,7 @@ env = ConstellationTasking(
     scenario=scenario,
     rewarder=rewarders,
     time_limit=60000,
-    sim_rate=5.0,
+    sim_rate=5.0, # Somehow 2x multiplier on this is needed to get the expected time steps. Not sure why.
     log_level="INFO",
 )
 
@@ -245,36 +246,34 @@ class SB3CompatibleEnv(gym.Env):
         return obs_dict[self.agent_name], info
 
     def step(self, action):
-            # 1. Basilisk simulation step
+            # Basilisk simulation step
             obs_dict, reward_dict, terminated_dict, truncated_dict, info = self.env.step({self.agent_name: action})
 
-            # 2. Extract BSK sim data
+            # Extract BSK sim data
             rso_sat = self.env.satellites[0]
             inspector_sat = self.env.satellites[1]
 
-            # 3. Extract inertial position and velocity
+            # Extract inertial position and velocity
             rso_r_N = np.array(rso_sat.dynamics.r_BN_N)
             rso_v_N = np.array(rso_sat.dynamics.v_BN_N)
             inspector_r_N = np.array(inspector_sat.dynamics.r_BN_N)
             inspector_v_N = np.array(inspector_sat.dynamics.v_BN_N)
 
-            # 4. Extract inspector attitude (MRPs) and rates
+            # Extract inspector attitude (MRPs) and rates
             inspector_sigma_BN = np.array(inspector_sat.dynamics.sigma_BN)
             inspector_omega_BN_B = np.array(inspector_sat.dynamics.omega_BN_B)
 
-            # 5. Compute relative Hill frame state
-            # cd2hill returns (rho, rho_dot), so we grab [0] and [1]
+            # Compute relative Hill frame state
             hill_state = cd2hill(rso_r_N, rso_v_N, inspector_r_N, inspector_v_N)
             r_DC_Hc = hill_state[0]
             v_DC_Hc = hill_state[1]
 
-            # 6. SAFELY get fuel (Check if 'dv_available' exists directly)
-            # This avoids needing to import 'fsw' for the isinstance check
+            # Get fuel
             dv_remaining = 0.0
             if hasattr(inspector_sat.fsw, 'dv_available'):
                 dv_remaining = inspector_sat.fsw.dv_available
 
-            # 7. Store in info Dictionary (MUST BE A DICT, NOT A LIST)
+            # Store in info Dictionary
             info = {
                 "metrics": {
                     "rso_r_N": rso_r_N,
@@ -320,130 +319,31 @@ class SimulationLoggerCallback(BaseCallback):
         # Helper to retrieve data as a Pandas DataFrame
         return pd.DataFrame(self.data_log)
 
-# Wrap the environment to be SB3 compatible    
-env_sb3 = SB3CompatibleEnv(env)
-env_sb3 = FlattenObservation(env_sb3)
-env_sb3_vec = DummyVecEnv([lambda: env_sb3])
-# model = PPO("MlpPolicy", env_sb3_vec, verbose=1, device="cuda")
 
-# Set learning policy
-model = PPO("MlpPolicy", env_sb3_vec, verbose=1, device="cpu")
+if __name__ == "__main__":
+    # Wrap the environment to be SB3 compatible    
+    env_sb3 = SB3CompatibleEnv(env)
+    env_sb3 = FlattenObservation(env_sb3)
+    env_sb3_vec = DummyVecEnv([lambda: env_sb3])
+    # model = PPO("MlpPolicy", env_sb3_vec, verbose=1, device="cuda")
 
-# Set up the simulation logger callback
-sim_logger = SimulationLoggerCallback()
+    model = PPO(
+        "MlpPolicy", 
+        env_sb3_vec, 
+        verbose=1, 
+        device="cpu",
+        n_steps=2048,
+        batch_size=64, # Must be a factor of n_steps
+        learning_rate=3e-4,
+        max_grad_norm=0.5,
+    )
 
-# Initiate model learning
-model.learn(total_timesteps=1, callback=sim_logger)
+    # Set up the simulation logger callback
+    sim_logger = SimulationLoggerCallback()
 
-data_df = sim_logger.get_dataframe()
+    # Initiate model learning
+    model.learn(total_timesteps=100000, callback=sim_logger)
 
-# Save the DataFrame to a CSV file
-data_df.to_csv("simulation_log.csv", index=False)
-
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
-def process_and_plot(df):
-    """
-    Unpacks vector columns and generates standard RPOD analysis plots.
-    """
-    # --- 1. Data Unpacking ---
-    # The dataframe currently has numpy arrays in cells. We split them into separate columns.
-    
-    # Unpack Hill Frame Position (r_DC_Hc) -> x (Radial), y (Along-Track), z (Cross-Track)
-    # Note: Basilisk Hill Frame: x=Radial, y=Along-Track, z=Orbit-Normal
-    df['hill_x'] = df['r_DC_Hc'].apply(lambda v: v[0])
-    df['hill_y'] = df['r_DC_Hc'].apply(lambda v: v[1])
-    df['hill_z'] = df['r_DC_Hc'].apply(lambda v: v[2])
-    
-    # Calculate Scalar Range and Velocity
-    df['range_mag'] = df['r_DC_Hc'].apply(np.linalg.norm)
-    df['vel_mag'] = df['v_DC_Hc'].apply(np.linalg.norm)
-    
-    # Calculate Cumulative Reward (to see total progress)
-    df['cumulative_reward'] = df['reward'].cumsum()
-
-    # Create a time axis (assuming sim_rate=5.0s per step, adjust if needed)
-    time_step = 5.0 # seconds (from your env creation args)
-    df['time_sec'] = df.index * time_step
-    df['time_min'] = df['time_sec'] / 60.0
-
-    # --- 2. Plotting ---
-    fig = plt.figure(figsize=(18, 10))
-    plt.suptitle(f"Inspector Agent Analysis (Steps: {len(df)})", fontsize=16)
-
-    # Plot A: 2D In-Plane Trajectory (Hill Frame)
-    # Standard view: Along-Track (Y) on x-axis, Radial (X) on y-axis
-    ax1 = fig.add_subplot(2, 3, 1)
-    ax1.plot(df['hill_y'], df['hill_x'], label='Trajectory', color='blue', marker='.', markersize=2)
-    ax1.scatter(0, 0, color='red', marker='*', s=100, label='Target (RSO)') # RSO is at Origin
-    ax1.set_title("In-Plane Motion (Hill Frame)")
-    ax1.set_xlabel("Along-Track [m] (y)")
-    ax1.set_ylabel("Radial [m] (x)")
-    ax1.grid(True, alpha=0.3)
-    ax1.axis('equal') # Crucial for orbital relative motion to look correct
-    ax1.legend()
-
-    # Plot B: 3D Trajectory
-    ax2 = fig.add_subplot(2, 3, 2, projection='3d')
-    ax2.plot(df['hill_x'], df['hill_y'], df['hill_z'], label='Path')
-    ax2.scatter(0, 0, 0, color='red', marker='*', s=100, label='RSO')
-    ax2.set_title("3D Relative Trajectory")
-    ax2.set_xlabel("Radial (x)")
-    ax2.set_ylabel("Along-Track (y)")
-    ax2.set_zlabel("Cross-Track (z)")
-
-    # Plot C: Range & Velocity vs Time
-    ax3 = fig.add_subplot(2, 3, 3)
-    color = 'tab:blue'
-    ax3.set_xlabel('Time [min]')
-    ax3.set_ylabel('Range [m]', color=color)
-    ax3.plot(df['time_min'], df['range_mag'], color=color)
-    ax3.tick_params(axis='y', labelcolor=color)
-    
-    # Twin axis for Velocity
-    ax3_twin = ax3.twinx()  
-    color = 'tab:orange'
-    ax3_twin.set_ylabel('Velocity [m/s]', color=color)  
-    ax3_twin.plot(df['time_min'], df['vel_mag'], color=color, linestyle='--')
-    ax3_twin.tick_params(axis='y', labelcolor=color)
-    ax3.set_title("Approach Metrics")
-    ax3.grid(True, alpha=0.3)
-
-    # Plot D: Fuel Consumption
-    ax4 = fig.add_subplot(2, 3, 4)
-    ax4.plot(df['time_min'], df['dV_remaining'], color='green')
-    ax4.set_title("Fuel Remaining")
-    ax4.set_xlabel("Time [min]")
-    ax4.set_ylabel("Delta-V [m/s]")
-    ax4.grid(True)
-
-    # Plot E: Reward History
-    ax5 = fig.add_subplot(2, 3, 5)
-    ax5.plot(df['time_min'], df['reward'], alpha=0.5, color='gray', label='Step Reward')
-    ax5.plot(df['time_min'], df['reward'].rolling(window=10).mean(), color='purple', label='Smoothed')
-    ax5.set_title("Reward Function")
-    ax5.set_xlabel("Time [min]")
-    ax5.set_ylabel("Reward")
-    ax5.legend()
-    ax5.grid(True)
-    
-    # Plot F: Attitude Error (Example using MRP magnitude)
-    # MRP magnitude roughly corresponds to rotation angle (check sigma definition)
-    df['sigma_mag'] = df['inspector_sigma_BN'].apply(np.linalg.norm)
-    ax6 = fig.add_subplot(2, 3, 6)
-    ax6.plot(df['time_min'], df['sigma_mag'], color='brown')
-    ax6.set_title("Attitude Magnitude (MRP Norm)")
-    ax6.set_xlabel("Time [min]")
-    ax6.set_ylabel("|sigma|")
-    ax6.grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-# --- EXECUTE PLOTTING ---
-# Ensure you have run enough steps to see a line!
-if len(data_df) > 1:
-    process_and_plot(data_df)
-else:
-    print("Not enough data points to plot. Increase 'total_timesteps' in model.learn().")
+    # # Save model
+    model.save("ppo_inspector_v1")
+    print("Model saved as ppo_inspector_v1.zip")
