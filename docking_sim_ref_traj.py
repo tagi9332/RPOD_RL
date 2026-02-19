@@ -1,374 +1,351 @@
+import os
 import numpy as np
 import pandas as pd
-from matplotlib import animation, pyplot as plt
 import gymnasium as gym
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from gymnasium.wrappers import FlattenObservation
 from stable_baselines3 import PPO
+import webbrowser
+import plotly.graph_objects as go
 
-# BSK-RL Imports
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# BSK-RL and Basilisk Imports
 from bsk_rl import ConstellationTasking, scene, data
-from bsk_rl.utils.orbital import cd2hill 
+from bsk_rl.sim import fsw
 from Basilisk.architecture import bskLogging
+from Basilisk.utilities import RigidBodyKinematics as rbk
 
-# Import definitions from train.py
-from docking_sim_training import RSOSat, InspectorSat, sat_arg_randomizer
+# --- IMPORT EVERYTHING FROM YOUR BASE TRAINING SCRIPT ---
+# Ensure docking_sim_training.py is in the same directory
+from docking_sim_training import (
+    rso_sat_args,
+    inspector_sat_args,
+    RSOSat,
+    InspectorSat,
+    SB3CompatibleEnv,
+    sat_arg_randomizer
+)
+
+# Local plotting scripts
+from utils.plotting.plot_results import plot_control_analysis, plot_trajectory_analysis
+from utils.plotting.animate_results import animate_results
+from utils.plotting.process_sim_data import process_sim_data
+from utils.plotting.plot_interactive_trajectories import plot_interactive_trajectories
+
+# Import weights
+from weights import reward_weight,alpha,weight
 
 # Silence logs
-bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
+bskLogging.setDefaultLogLevel(bskLogging.BSK_WARNING)
 
-# --- HELPER: MRP to Rotation Matrix ---
-def MRP2C(sigma):
-    """Converts Modified Rodrigues Parameters to a Direction Cosine Matrix (Rotation Matrix)."""
-    sigma = np.array(sigma)
-    s_sq = np.dot(sigma, sigma)
-    if s_sq > 1.0: # Check for shadow set switching if needed, though BSK handles this usually
-        pass 
-        
-    skew_s = np.array([
-        [0, -sigma[2], sigma[1]],
-        [sigma[2], 0, -sigma[0]],
-        [-sigma[1], sigma[0], 0]
-    ])
-    
-    # MRP Rotation Matrix Formula
-    return np.eye(3) + (8 * np.dot(skew_s, skew_s) - 4 * (1 - s_sq) * skew_s) / ((1 + s_sq)**2)
-
-# --- 1. Custom Wrapper (Updated for Attitude Data) ---
-class SB3CompatibleEnv(gym.Env):
+# --- 1. Custom Inference Wrapper ---
+class InferenceEnv(SB3CompatibleEnv):
+    """
+    Inherits the exact step/reset logic from the training environment, 
+    but tacks on extra telemetry for the plotting scripts.
+    """
     def __init__(self, env, agent_name="Inspector"):
-        self.env = env
-        self.agent_name = agent_name
-        self.observation_space = env.observation_space(agent_name)
-        self.action_space = env.action_space(agent_name)
-        
-        self.sim_rate = getattr(env, 'sim_rate', 5.0) 
+        super().__init__(env, agent_name) 
+        self.sim_rate = getattr(env, 'sim_rate', 1.0) 
         self.current_sim_time = 0.0
 
     def reset(self, **kwargs):
         self.current_sim_time = 0.0 
-        obs_dict, info = self.env.reset(**kwargs)
-        return obs_dict[self.agent_name], info
+        return super().reset(**kwargs)
 
     def step(self, action):
-        obs_dict, reward_dict, terminated_dict, truncated_dict, info = self.env.step({self.agent_name: action})
-        
+        # 1. Run normal training step logic
+        obs, reward, terminated, truncated, info = super().step(action)
         self.current_sim_time += self.sim_rate
 
-        # --- DATA EXTRACTION ---
+        # 2. Extract extra telemetry just for inference plots
         rso = self.env.satellites[0]
         inspector = self.env.satellites[1]
         
-        # Orbital States
         rso_r_N = np.array(rso.dynamics.r_BN_N)
-        rso_v_N = np.array(rso.dynamics.v_BN_N)
         insp_r_N = np.array(inspector.dynamics.r_BN_N)
-        insp_v_N = np.array(inspector.dynamics.v_BN_N)
-        
-        # Attitude State (Required for Plot 6)
         sigma_BN = np.array(inspector.dynamics.sigma_BN)
+        dcm_BN = rbk.MRP2C(sigma_BN)
 
-        # Hill Frame Conversion
-        hill_state = cd2hill(rso_r_N, rso_v_N, insp_r_N, insp_v_N)
-        
-        info = {
-            "metrics": {
-                "sim_time": self.current_sim_time,
-                "r_DC_Hc": hill_state[0],
-                "v_DC_Hc": hill_state[1],
-                "sigma_BN": sigma_BN,  # <--- NEW: Capture Attitude
-                "reward": reward_dict[self.agent_name],
-                "dV_remaining": getattr(inspector.fsw, 'dv_available', 0.0)
-            }
-        }
-        
-        return obs_dict[self.agent_name], reward_dict[self.agent_name], terminated_dict[self.agent_name], truncated_dict[self.agent_name], info
+        # Compute pointing error
+        r_Rel_N = rso_r_N - insp_r_N
+        dist = np.linalg.norm(r_Rel_N)
+        u_Target_N = r_Rel_N / dist if dist > 1e-6 else np.array([1., 0., 0.])
+        u_Target_B = np.dot(dcm_BN, u_Target_N)
+        boresight_B = np.array([0.0, 0.0, 1.0]) 
+        pointing_error_rad = np.arccos(np.clip(np.dot(u_Target_B, boresight_B), -1.0, 1.0))
 
-# --- 2. Inference Loop ---
-def run_inference():
-    # Setup Environment
-    rso_args = dict(conjunction_radius=2.0, batteryStorageCapacity=1e12, u_max=0.01)
-    insp_args = dict(
-    imageAttErrorRequirement=1.0,
-    imageRateErrorRequirement=None,
-    instrumentBaudRate=1,
-    dataStorageCapacity=1e6,
-    batteryStorageCapacity=1e12,
-    storedCharge_Init=1e12,
-    conjunction_radius=2.0,
-    dv_available_init=50.0,
-    max_range_radius=10000,
-    chief_name="RSO",
-    u_max=0.01
-)
+        # Hardware metrics
+        insp_torque_cmd = inspector.dynamics.satellite.data_store.satellite.dynamics.satellite.fsw.rwMotorTorque.rwMotorTorqueOutMsg.payloadPointer.motorTorque[0:3]
+        wheel_speeds = inspector.data_store.satellite.fsw.satellite.dynamics.wheel_speeds
+
+        # 3. Append to existing metrics dictionary (r_DC_Hc & docked_state are already here from parent!)
+        if "metrics" in info:
+            info["metrics"]["sim_time"] = self.current_sim_time
+            info["metrics"]["pointing_error"] = pointing_error_rad
+            info["metrics"]["torque_cmd"] = insp_torque_cmd
+            info["metrics"]["wheel_speeds"] = wheel_speeds
+        
+        return obs, reward, terminated, truncated, info
+
+
+# --- 2. Plotting Functions ---
+def plot_all_trajectories(all_runs_data, summary_df, output_folder):
+    """Plots all 30 trajectories on a single 3D graph."""
+    print("Generating 3D Multi-Trajectory Plot...")
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
     
-    scenario = scene.SphericalRSO(n_points=100, radius=1.0, theta_max=np.radians(30), range_max=250)
+    ax.scatter(0, 0, 0, color='black', marker='*', s=300, label='Target (RSO)')
+    
+    success_plotted, fail_plotted = False, False
+
+    for idx, run_df in enumerate(all_runs_data):
+        is_success = summary_df.loc[idx, "success"]
+        
+        color = 'mediumseagreen' if is_success else 'crimson'
+        alpha = 0.8 if is_success else 0.3
+        
+        label = None
+        if is_success and not success_plotted:
+            label = "Successful Approach"
+            success_plotted = True
+        elif not is_success and not fail_plotted:
+            label = "Failed/Timeout"
+            fail_plotted = True
+
+        ax.plot(run_df["hill_x"], run_df["hill_y"], run_df["hill_z"], 
+                color=color, alpha=alpha, linewidth=1.5, label=label)
+        
+        ax.scatter(run_df["hill_x"].iloc[0], run_df["hill_y"].iloc[0], run_df["hill_z"].iloc[0], 
+                   color='blue', s=15, alpha=0.5)
+
+    ax.set_xlabel('Relative X (m)')
+    ax.set_ylabel('Relative Y (m)')
+    ax.set_zlabel('Relative Z (m)')
+    ax.set_title('Monte Carlo Trajectories (30 Runs)')
+    ax.legend()
+    
+    plot_path = os.path.join(output_folder, 'mc_all_trajectories.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved trajectory plot to: {plot_path}")
+
+
+def plot_summary_table(summary_df, output_folder):
+    """Draws a clean Matplotlib table image of the results."""
+    print("Generating Results Table Image...")
+    fig, ax = plt.subplots(figsize=(12, 10))
+    ax.axis('tight')
+    ax.axis('off')
+    
+    display_df = summary_df[["run_id", "total_reward", "total_sim_time", "end_status", "success"]].copy()
+    display_df["total_reward"] = display_df["total_reward"].round(2)
+    display_df["total_sim_time"] = display_df["total_sim_time"].astype(str) + " s"
+    
+    # Text-based success to avoid missing glyph warnings
+    display_df["success"] = display_df["success"].apply(lambda x: "Pass" if x else "Fail")
+    
+    table = ax.table(cellText=display_df.values, 
+                     colLabels=["Run ID", "Final Reward", "Total Sim Time", "End Condition", "Success"], 
+                     loc='center', cellLoc='center')
+    
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.0, 1.5) 
+    
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_text_props(weight='bold', color='white')
+            cell.set_facecolor('#4C72B0')
+
+    plt.title("Monte Carlo Results Summary", fontsize=16, fontweight='bold', pad=20)
+    
+    plot_path = os.path.join(output_folder, 'mc_results_table.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved table image to: {plot_path}")
+
+
+# --- 3. Inference Loop ---
+def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
+    
+    scenario = scene.SphericalRSO(
+        n_points=100, radius=1.0, theta_max=np.radians(30), 
+        range_max=250, theta_solar_max=np.radians(60)
+    )
+    
     rewarders = (
-        data.RSOInspectionReward(completion_bonus=1.0, completion_threshold=0.90),
-        data.ResourceReward(resource_fn=lambda s: s.fsw.dv_available if hasattr(s.fsw, 'dv_available') else 0.0, reward_weight=0.001),
-        data.RelativeRangeLogReward(alpha=-1, delta_x_max=np.array([1000, 1000, 1000, 1, 1, 1])),
+        data.ResourceReward(
+            resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0, 
+            reward_weight=reward_weight
+        ),
+        data.RelativeRangeLogReward(
+            alpha=alpha, 
+            delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0]),
+        ),
+        data.RelativeCosineReward(
+            weight=weight
+        )
     )
 
+    print("Initializing Environment...")
     env = ConstellationTasking(
-        satellites=[RSOSat("RSO", sat_args=rso_args), InspectorSat("Inspector", sat_args=insp_args)],
+        satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
         sat_arg_randomizer=sat_arg_randomizer,
         scenario=scenario,
         rewarder=rewarders,
-        time_limit=60000,
-        sim_rate=0.50,
+        time_limit=6000, 
+        sim_rate=1.0,    
     )
 
-    env_sb3 = SB3CompatibleEnv(env)
+    env_sb3 = InferenceEnv(env)
     env_sb3 = FlattenObservation(env_sb3)
-    
-    print("Loading Model...")
+
+    print(f"Loading Model: {model_path}")
     try:
-        model = PPO.load("ppo_inspector_v1")
+        model = PPO.load(model_path)
     except FileNotFoundError:
-        print("Model not found. Ensure ppo_inspector_v1.zip exists.")
-        return None
+        print(f"ERROR: Model not found at {model_path}")
+        return None, None
 
-    print("Generating Trajectory...")
-    obs, _ = env_sb3.reset()
-    done = False
-    reference_data_log = [] 
+    print(f"Starting Monte Carlo Simulation: {num_runs} runs...")
+    
+    all_runs_data = [] 
+    summary_stats = [] 
 
-    while not done:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env_sb3.step(action)
+    for run_idx in range(num_runs):
+        print(f"--- Executing Run {run_idx + 1}/{num_runs} ---")
         
-        if "metrics" in info:
-            reference_data_log.append(info["metrics"])
+        obs, _ = env_sb3.reset()
+        if isinstance(obs, tuple): 
+            obs = obs[0]
             
-        done = terminated or truncated
+        done = False
+        run_data_log = [] 
+        total_reward = 0.0
 
-    # Process Data
-    df = pd.DataFrame(reference_data_log)
-    
-    # Unpack Vectors
-    df['hill_x'] = df['r_DC_Hc'].apply(lambda v: v[0])
-    df['hill_y'] = df['r_DC_Hc'].apply(lambda v: v[1])
-    df['hill_z'] = df['r_DC_Hc'].apply(lambda v: v[2])
-    
-    # Unpack Attitude (Sigma)
-    df['sigma_1'] = df['sigma_BN'].apply(lambda v: v[0])
-    df['sigma_2'] = df['sigma_BN'].apply(lambda v: v[1])
-    df['sigma_3'] = df['sigma_BN'].apply(lambda v: v[2])
+        while not done:
+            action, _ = model.predict(obs, deterministic=True)
+            step_result = env_sb3.step(action)
+            
+            if len(step_result) == 4:
+                obs, reward, done_array, info_array = step_result
+                done = done_array[0]
+                info = info_array[0]
+                reward = reward[0] 
+            else:
+                obs, reward, terminated, truncated, info = step_result
+                done = terminated or truncated
+            
+            total_reward += reward
 
-    df.to_csv("reference_sim_data.csv", index=False)
-    print(f"Simulation Complete. {len(df)} steps collected.")
-    return df
+            if "metrics" in info:
+                metrics = info["metrics"]
+                flat_metrics = {"run_id": run_idx + 1} 
+                
+                for k, v in metrics.items():
+                    # Renames r_DC_Hc to hill so local plotter doesn't crash
+                    key_name = "hill" if k == "r_DC_Hc" else k
+                    
+                    if isinstance(v, (np.ndarray, list)) and len(v) == 3:
+                        flat_metrics[f"{key_name}_x"] = v[0]
+                        flat_metrics[f"{key_name}_y"] = v[1]
+                        flat_metrics[f"{key_name}_z"] = v[2]
+                    else:
+                        flat_metrics[key_name] = v
+                        
+                run_data_log.append(flat_metrics)
 
-# --- 3. Plotting (Matches Image) ---
-def plot_results(df):
-    if df is None or df.empty: return
-
-    # Conversions
-    df['time_min'] = df['sim_time'] / 60.0
-    df['range_mag'] = df['r_DC_Hc'].apply(np.linalg.norm)
-    df['vel_mag'] = df['v_DC_Hc'].apply(np.linalg.norm)
-
-    # Create 2x3 Grid
-    fig = plt.figure(figsize=(18, 10))
-    fig.suptitle(f"Inspector Agent Analysis (Steps: {len(df)})", fontsize=16)
-
-    # --- Plot 1: In-Plane Motion (Hill Frame) ---
-    ax1 = fig.add_subplot(2, 3, 1)
-    ax1.plot(df['hill_y'], df['hill_x'], label='Trajectory', color='blue')
-    ax1.scatter(0, 0, color='red', marker='*', s=150, label='Target (RSO)', zorder=5)
-    ax1.scatter(df['hill_y'].iloc[0], df['hill_x'].iloc[0], color='green', s=100, label='X0 (Inspector)', zorder=5)
-    ax1.set_xlabel("Along-Track [m] (y)")
-    ax1.set_ylabel("Radial [m] (x)")
-    ax1.set_title("In-Plane Motion (Hill Frame)")
-    ax1.axis('equal')
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
-
-    # --- Plot 2: 3D Relative Trajectory ---
-    ax2 = fig.add_subplot(2, 3, 2, projection='3d')
-    ax2.plot(df['hill_x'], df['hill_y'], df['hill_z'], label='Trajectory')
-    ax2.scatter(0, 0, 0, color='red', marker='*', s=150)
-    ax2.scatter(df['hill_x'].iloc[0], df['hill_y'].iloc[0], df['hill_z'].iloc[0], color='green', s=100) # type: ignore
-    ax2.set_title("3D Relative Trajectory")
-    ax2.set_xlabel("Radial (x)")
-    ax2.set_ylabel("Along-Track (y)")
-    ax2.set_zlabel("Cross-Track (z)") #type: ignore
-
-    # --- Plot 3: Approach Metrics (Range/Vel) ---
-    ax3 = fig.add_subplot(2, 3, 3)
-    ln1 = ax3.plot(df['time_min'], df['range_mag'], label='Range [m]', color='steelblue')
-    ax3.set_ylabel("Range [m]", color='steelblue')
-    ax3.tick_params(axis='y', labelcolor='steelblue')
-    
-    ax3_twin = ax3.twinx()
-    ln2 = ax3_twin.plot(df['time_min'], df['vel_mag'], label='Velocity [m/s]', color='darkorange', linestyle='--')
-    ax3_twin.set_ylabel("Velocity [m/s]", color='darkorange')
-    ax3_twin.tick_params(axis='y', labelcolor='darkorange')
-    
-    ax3.set_xlabel("Time [min]")
-    ax3.set_title("Approach Metrics")
-    ax3.grid(True, alpha=0.3)
-
-    # --- Plot 4: Fuel Remaining ---
-    ax4 = fig.add_subplot(2, 3, 4)
-    ax4.plot(df['time_min'], df['dV_remaining'], color='forestgreen')
-    ax4.set_xlabel("Time [min]")
-    ax4.set_ylabel("Delta-V [m/s]")
-    ax4.set_title("Fuel Remaining")
-    ax4.grid(True)
-
-    # --- Plot 5: Reward Function ---
-    ax5 = fig.add_subplot(2, 3, 5)
-    ax5.plot(df['time_min'], df['reward'], color='purple', alpha=0.6, label='Step Reward')
-    ax5.set_xlabel("Time [min]")
-    ax5.set_ylabel("Reward")
-    ax5.set_title("Reward Function")
-    ax5.legend(loc='lower right')
-    ax5.grid(True)
-
-    # --- Plot 6: Inspector Attitude (MRPs) ---
-    ax6 = fig.add_subplot(2, 3, 6)
-    ax6.plot(df['time_min'], df['sigma_1'], label='Sigma 1', color='red')
-    ax6.plot(df['time_min'], df['sigma_2'], label='Sigma 2', color='forestgreen')
-    ax6.plot(df['time_min'], df['sigma_3'], label='Sigma 3', color='blue')
-    ax6.set_xlabel("Time [min]")
-    ax6.set_ylabel("$\sigma$")
-    ax6.set_title("Inspector Attitude (MRPs)")
-    ax6.grid(True)
-    ax6.legend(loc='lower right')
-
-    plt.tight_layout()
-    plt.savefig("inspector_agent_analysis.png")
-
-    # --- 3. Animation Function ---
-def animate_results(df):
-    if df is None or df.empty: return
-    print("Generating Animation...")
-
-    # Data subsampling (Plot every Nth frame to make animation smoother/faster)
-    step = 1 
-    df_anim = df.iloc[::step].reset_index(drop=True)
-    n_frames = len(df_anim)
-
-    # Setup Figure
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Scale calculation for axis limits and objects
-    max_range = df[['hill_x', 'hill_y', 'hill_z']].abs().max().max()
-    limit = max_range * 1.1
-    scale_factor = max_range * 0.05 # Base scale for objects
-
-    # --- Static Objects ---
-    # RSO (Target) at Origin
-    ax.scatter([0], [0], [0], color='red', marker='*', s=200, label='RSO (Target)')
-
-    # --- Dynamic Objects ---
-    # 1. Trajectory Line
-    line, = ax.plot([], [], [], color='blue', alpha=0.5, linewidth=1, label='Trajectory')
-    
-    # 2. Inspector Box
-    box_scale = scale_factor
-    v_box = np.array([[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
-                      [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]) * box_scale
-    
-    faces_box = [[v_box[j] for j in [0, 1, 2, 3]], [v_box[j] for j in [4, 5, 6, 7]], 
-                 [v_box[j] for j in [0, 3, 7, 4]], [v_box[j] for j in [1, 2, 6, 5]], 
-                 [v_box[j] for j in [0, 1, 5, 4]], [v_box[j] for j in [2, 3, 7, 6]]]
-    
-    inspector_box = Poly3DCollection(faces_box, facecolors='green', edgecolors='black', alpha=0.8)
-    ax.add_collection3d(inspector_box)
-
-    # 3. Boresight Cone (NEW)
-    # Define cone parameters in body frame (pointing along +x axis)
-    cone_len = scale_factor * 5.0 # Make it significantly longer than the box
-    cone_angle_deg = 15
-    cone_radius = cone_len * np.tan(np.radians(cone_angle_deg))
-    
-    # Generate base circle points in y-z plane
-    theta = np.linspace(0, 2*np.pi, 20)
-    y_base = cone_radius * np.cos(theta)
-    z_base = cone_radius * np.sin(theta)
-    x_base = np.full_like(y_base, cone_len)
-    
-    # Vertices: Apex at origin + base circle points
-    v_cone_base = np.vstack((x_base, y_base, z_base)).T
-    v_cone_apex = np.array([[0.0, 0.0, 0.0]])
-    v_cone = np.vstack((v_cone_apex, v_cone_base))
-
-    # Faces: Triangles connecting apex to each base segment
-    faces_cone = []
-    for i in range(len(theta) - 1):
-        faces_cone.append([v_cone[0], v_cone[i+1], v_cone[i+2]])
-    faces_cone.append([v_cone[0], v_cone[-1], v_cone[1]]) # Close the loop
-    
-    # Create cone collection
-    boresight_cone = Poly3DCollection(faces_cone, facecolors='cyan', edgecolors='none', alpha=0.4)
-    ax.add_collection3d(boresight_cone)
-
-    # Axis Labels & View
-    ax.set_xlim(-limit, limit)
-    ax.set_ylim(-limit, limit)
-    ax.set_zlim(-limit, limit)
-    ax.set_xlabel('Radial (x)')
-    ax.set_ylabel('Along-Track (y)')
-    ax.set_zlabel('Cross-Track (z)')
-    ax.set_title("Inspector Agent Maneuver with Boresight")
-    ax.legend()
-
-    def update(frame):
-        # Get data for current frame
-        row = df_anim.iloc[frame]
-        pos = np.array([row['hill_x'], row['hill_y'], row['hill_z']])
-        sigma = row['sigma_BN']
+        # --- Post-run processing ---
+        run_df = pd.DataFrame(run_data_log)
+        all_runs_data.append(run_df)
         
-        # Calculate Rotation Matrix (Body to Inertial/Hill)
-        R_BN = MRP2C(sigma)
-        R_NB = R_BN.T # Transpose for Body -> Inertial rotation
-
-        # --- Update Trajectory Line ---
-        current_data = df_anim.iloc[:frame+1]
-        line.set_data(current_data['hill_x'], current_data['hill_y'])
-        line.set_3d_properties(current_data['hill_z'])
-
-        # --- Update Box ---
-        # Rotate and translate vertices
-        v_box_rot = (R_NB @ v_box.T).T + pos
+        sim_rate = env_sb3.unwrapped.sim_rate
+        total_sim_time = len(run_df) * sim_rate
+        final_dist = np.linalg.norm([run_df.iloc[-1]["hill_x"], run_df.iloc[-1]["hill_y"], run_df.iloc[-1]["hill_z"]])
         
-        new_faces_box = [[v_box_rot[j] for j in [0, 1, 2, 3]], [v_box_rot[j] for j in [4, 5, 6, 7]], 
-                         [v_box_rot[j] for j in [0, 3, 7, 4]], [v_box_rot[j] for j in [1, 2, 6, 5]], 
-                         [v_box_rot[j] for j in [0, 1, 5, 4]], [v_box_rot[j] for j in [2, 3, 7, 6]]]
-        inspector_box.set_verts(new_faces_box)
+        # Exact truth logic from the parent environment
+        success = bool(run_df.iloc[-1].get("docked_state", False))
+        
+        if success:
+            end_status = "Conjunction (Docked)"
+        elif len(run_df) >= (6000 / sim_rate):
+            end_status = "Timeout"
+        else:
+            end_status = "Fuel Exhausted / Boundary Viol."
+        
+        summary_stats.append({
+            "run_id": run_idx + 1,
+            "total_reward": total_reward,
+            "episode_length": len(run_df),
+            "total_sim_time": total_sim_time,
+            "end_status": end_status,
+            "success": success,
+            "final_distance": final_dist
+        })
 
-        # --- Update Cone ---
-        # Rotate and translate vertices
-        v_cone_rot = (R_NB @ v_cone.T).T + pos
-        
-        # Reconstruct faces with rotated vertices
-        new_faces_cone = []
-        for i in range(len(theta) - 1):
-            new_faces_cone.append([v_cone_rot[0], v_cone_rot[i+1], v_cone_rot[i+2]])
-        new_faces_cone.append([v_cone_rot[0], v_cone_rot[-1], v_cone_rot[1]])
-        
-        boresight_cone.set_verts(new_faces_cone)
-        
-        return line, inspector_box, boresight_cone
-
-    #Create Animation
-    ani = animation.FuncAnimation(fig, update, frames=n_frames, interval=50, blit=False)
+    # --- AGGREGATE RESULTS ---
+    print("\n=== Monte Carlo Summary ===")
+    summary_df = pd.DataFrame(summary_stats)
     
-    # Save as GIF
-    output_file = 'inspector_maneuver_with_cone.gif'
-    print(f"Saving animation to {output_file}...")
-    try:
-        ani.save(output_file, writer='pillow', fps=20)
-        print("Animation saved successfully.")
-    except Exception as e:
-        print(f"Could not save GIF (missing ImageMagick/Pillow?): {e}")
-        plt.show()
+    mean_reward = summary_df["total_reward"].mean()
+    std_reward = summary_df["total_reward"].std()
+    success_rate = (summary_df["success"].sum() / num_runs) * 100
     
+    print(f"Mean Reward: {mean_reward:.2f} +/- {std_reward:.2f}")
+    print(f"Success Rate: {success_rate:.1f}%")
+    print(f"Average Final Distance: {summary_df['final_distance'].mean():.2f}m")
+    
+    summary_df.to_csv(os.path.join(output_folder, "mc_summary_stats.csv"), index=False)
+    
+    combined_df = pd.concat(all_runs_data, ignore_index=True)
+    combined_df.to_csv(os.path.join(output_folder, "mc_all_runs_data.csv"), index=False)
+
+    return all_runs_data, summary_df
+
 
 if __name__ == "__main__":
-    df = run_inference()
-    plot_results(df)
-    animate_results(df)
+    output_folder = "results"
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Ingest model
+    model_path = "ppo_inspector_final.zip"
+
+    # Execute Inference
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=15)
+
+    # Plot results
+    if all_runs_data:
+        plot_all_trajectories(all_runs_data, summary_df, output_folder)
+        plot_interactive_trajectories(all_runs_data, summary_df, output_folder)
+        plot_summary_table(summary_df, output_folder)
+
+        try:
+            successful_runs = summary_df[summary_df["success"] == True]
+            
+            if not successful_runs.empty:
+                # Pick the successful run that used the LEAST time
+                best_run_id = successful_runs.loc[successful_runs["total_sim_time"].idxmin(), "run_id"]
+                print(f"\nPlotting and Animating the FASTEST successful run (Run {best_run_id})...")
+                best_run_idx = best_run_id - 1
+            else:
+                best_run_id = summary_df.loc[summary_df["total_reward"].idxmax(), "run_id"]
+                print(f"\nNo successful runs. Animating the highest reward run (Run {best_run_id})...")
+                best_run_idx = best_run_id - 1
+
+            best_run_df = all_runs_data[best_run_idx]
+            best_run_df = all_runs_data[best_run_idx]
+
+            # --- ADD THESE TWO LINES TO FIX 'time_min' ERROR ---
+            if "sim_time" in best_run_df.columns:
+                best_run_df["time_min"] = best_run_df["sim_time"] / 60.0
+            # ---------------------------------------------------
+
+            plot_trajectory_analysis(best_run_df, output_folder=output_folder)
+            plot_control_analysis(best_run_df, output_folder=output_folder)
+            animate_results(best_run_df, output_folder=output_folder)
+            
+        except Exception as e:
+            print(f"Error during plotting: {e}")
