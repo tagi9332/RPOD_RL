@@ -49,7 +49,7 @@ inspector_sat_args = dict(
     batteryStorageCapacity=1e12,
     storedCharge_Init=1e12,
     conjunction_radius=50.0,
-    dv_available_init=500.0,
+    dv_available_init=150,
     max_range_radius=5000,
     chief_name="RSO",
     u_max=2.0
@@ -106,16 +106,6 @@ class InspectorSat(sats.Satellite):
             chief_name="RSO", max_dv=2, max_drift_duration=20,
         )
     ]
-
-    # action_spec = [
-    #     act.ImpulsiveThrustSphericalLOS(
-    #         chief_name="RSO", 
-    #         max_dv=0.5, 
-    #         max_drift_duration=30, 
-    #         fsw_action="action_inspect_rso"
-    #     )
-    # ]
-
     dyn_type = types.new_class("Dyn", (dyn.MaxRangeDynModel, dyn.ConjunctionDynModel, dyn.RSOInspectorDynModel))
     # fsw_type = types.new_class("FSW", (fsw.SteeringFSWModel, fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))
     fsw_type = types.new_class("FSW", (fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))

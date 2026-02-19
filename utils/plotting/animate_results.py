@@ -86,7 +86,7 @@ def animate_results(df, output_folder="results"):
         # Get data for current frame
         row = df_anim.iloc[frame]
         pos = np.array([row['hill_x'], row['hill_y'], row['hill_z']])
-        sigma = row['sigma_BN']
+        sigma = np.array([row['sigma_1'], row['sigma_2'], row['sigma_3']])
         
         # Calculate Rotation Matrix (Body to Inertial/Hill)
         R_BN = MRP2C(sigma)
