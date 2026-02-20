@@ -1,9 +1,11 @@
+# Standard Imports
 import os
 import numpy as np
 import pandas as pd
 from gymnasium.wrappers import FlattenObservation
 from stable_baselines3 import PPO
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 
 # BSK-RL and Basilisk imports
 from bsk_rl import ConstellationTasking, scene, data
@@ -17,7 +19,7 @@ from src.train import (
     inspector_sat_args,
     RSOSat,
     InspectorSat,
-    SB3_BKS_env,
+    Sb3BksEnv,
     sat_arg_randomizer
 )
 
@@ -44,7 +46,7 @@ from resources import (
 bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
 
 # Inference environment wrapper
-class InferenceEnv(SB3_BKS_env):
+class InferenceEnv(Sb3BksEnv):
     """
     Inherits the exact step/reset logic from the training environment, 
     but tacks on extra telemetry for the plotting scripts.
@@ -96,34 +98,151 @@ class InferenceEnv(SB3_BKS_env):
         return obs, reward, terminated, truncated, info
 
 # Plotting functions
+
+def plot_mc_distributions(all_runs_data, summary_df, output_folder):
+    print("Generating Scatter + Histogram Distributions...")
+    
+    # Calculate derived metrics for each run
+    dv_usages = []
+    final_vels = []
+    
+    for run_df in all_runs_data:
+        # 1. dV Usage
+        if "dV_remaining" in run_df.columns:
+            # Assuming dV_remaining decreases over time
+            dv_used = run_df["dV_remaining"].iloc[0] - run_df["dV_remaining"].iloc[-1]
+        else:
+            dv_used = 0.0
+        dv_usages.append(dv_used)
+        
+        # 2. Final relative velocity magnitude
+        # Check if v_DC_Hc exists (typical BSK-RL key), else estimate from position delta
+        if "v_DC_Hc_x" in run_df.columns:
+            vx = run_df["v_DC_Hc_x"].iloc[-1]
+            vy = run_df["v_DC_Hc_y"].iloc[-1]
+            vz = run_df["v_DC_Hc_z"].iloc[-1]
+            vf = np.linalg.norm([vx, vy, vz])
+        else:
+            # Fallback backward difference estimate
+            if len(run_df) > 1:
+                # Extract sim rate from elapsed time / steps
+                dt = (run_df["sim_time"].iloc[-1] - run_df["sim_time"].iloc[-2]) if "sim_time" in run_df.columns else 1.0
+                dx = run_df["hill_x"].iloc[-1] - run_df["hill_x"].iloc[-2]
+                dy = run_df["hill_y"].iloc[-1] - run_df["hill_y"].iloc[-2]
+                dz = run_df["hill_z"].iloc[-1] - run_df["hill_z"].iloc[-2]
+                vf = np.linalg.norm([dx, dy, dz]) / dt if dt > 0 else 0.0
+            else:
+                vf = 0.0
+        final_vels.append(vf)
+        
+    # Create a local dataframe for plotting to map colors nicely
+    plot_df = summary_df.copy()
+    plot_df["dv_usage"] = dv_usages
+    plot_df["final_vel"] = final_vels
+    
+    # Define the 4 metrics we are plotting
+    metrics = [
+        ("dv_usage", "Total dV Usage (m/s)"),
+        ("total_sim_time", "Simulation Duration (s)"),
+        ("final_vel", "Final Rel. Velocity (m/s)"),
+        ("total_reward", "Total Reward")
+    ]
+    
+    fig = plt.figure(figsize=(10, 14))
+    # 4 rows, 2 columns (scatter, histogram)
+    gs = gridspec.GridSpec(4, 2, width_ratios=(4, 1), wspace=0.05, hspace=0.3)
+    
+    colors = ['#4C72B0', '#DD8452', '#55A868', '#C44E52'] # Seaborn muted colors
+    
+    for i, (col, ylabel) in enumerate(metrics):
+            ax_scatter = fig.add_subplot(gs[i, 0])
+            ax_hist = fig.add_subplot(gs[i, 1], sharey=ax_scatter)
+            
+            x = plot_df["run_id"]
+            y = plot_df[col]
+
+            # --- Calculate Statistics ---
+            mean_val = y.mean()
+            std_val = y.std()
+            upper_bound = mean_val + 3 * std_val
+            lower_bound = mean_val - 3 * std_val
+            
+            # Map scatter colors based on pass/fail
+            scatter_colors = plot_df["success"].apply(lambda s: colors[i] if s else "gray")
+            
+            # Plot Scatter
+            ax_scatter.scatter(x, y, color=scatter_colors, alpha=0.8, edgecolor='k', s=60, zorder=3)
+            
+            # Plot Histogram
+            ax_hist.hist(y, bins=15, orientation='horizontal', color=colors[i], alpha=0.7, edgecolor='k', zorder=3)
+
+            # --- Add Mean and 3-Sigma Lines ---
+            for ax in [ax_scatter, ax_hist]:
+                # Mean line
+                ax.axhline(mean_val, color='black', linestyle='-', linewidth=1.5, label='Mean', zorder=4)
+                # 3rd Sigma bounds
+                ax.axhline(upper_bound, color='red', linestyle=':', linewidth=1.2, label='3σ', zorder=4)
+                ax.axhline(lower_bound, color='red', linestyle=':', linewidth=1.2, zorder=4)
+
+            # Formatting
+            ax_scatter.set_ylabel(ylabel, fontsize=11, fontweight='bold')
+            if i == 0: # Add legend to the top plot only to keep it clean
+                ax_scatter.legend(loc='upper right', fontsize='small', frameon=True).set_zorder(5)
+                
+            if i == 3:
+                ax_scatter.set_xlabel("Monte Carlo Run ID", fontsize=11)
+                ax_hist.set_xlabel("Count", fontsize=11)
+                
+            ax_scatter.grid(True, linestyle='--', alpha=0.6)
+            ax_hist.grid(True, linestyle='--', alpha=0.6)
+            ax_hist.tick_params(labelleft=False)
+        
+    fig.suptitle("Monte Carlo Run Distributions", fontsize=16, y=0.93, fontweight='bold')
+    
+    plot_path = os.path.join(output_folder, 'mc_distributions.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
 def plot_all_trajectories(all_runs_data, summary_df, output_folder):
     print("Generating 3D Multi-Trajectory Plot...")
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(0, 0, 0, color='black', marker='*', s=300, label='Target (RSO)') #type: ignore
-    
-    success_plotted, fail_plotted = False, False
+    ax.scatter(0, 0, 0, color='black', marker='*', s=300, label='Target (RSO)')
+
+    # Added start_plotted flag here
+    success_plotted, fail_plotted, start_plotted = False, False, False
 
     for idx, run_df in enumerate(all_runs_data):
         is_success = summary_df.loc[idx, "success"]
         color = 'mediumseagreen' if is_success else 'crimson'
         alpha = 0.8 if is_success else 0.3
         
-        label = None
+        # Trajectory Labels
+        traj_label = None
         if is_success and not success_plotted:
-            label = "Successful Approach"
+            traj_label = "Successful Approach"
             success_plotted = True
         elif not is_success and not fail_plotted:
-            label = "Failed/Timeout"
+            traj_label = "Failed/Timeout"
             fail_plotted = True
 
-        ax.plot(run_df["hill_x"], run_df["hill_y"], run_df["hill_z"], color=color, alpha=alpha, linewidth=1.5, label=label)
-        ax.scatter(run_df["hill_x"].iloc[0], run_df["hill_y"].iloc[0], run_df["hill_z"].iloc[0], color='blue', s=15, alpha=0.5) #type: ignore
+        # Plot the trajectory line
+        ax.plot(run_df["hill_x"], run_df["hill_y"], run_df["hill_z"], 
+                color=color, alpha=alpha, linewidth=1.5, label=traj_label)
+
+        # --- Legend logic for Initial Position ---
+        start_label = "Initial Position" if not start_plotted else None
+        
+        ax.scatter(run_df["hill_x"].iloc[0], run_df["hill_y"].iloc[0], run_df["hill_z"].iloc[0], 
+                   color='blue', s=15, alpha=0.5, label=start_label)
+        
+        start_plotted = True 
+        # -----------------------------------------
 
     ax.set_xlabel('Relative X (m)')
     ax.set_ylabel('Relative Y (m)')
-    ax.set_zlabel('Relative Z (m)') #type: ignore
-    ax.set_title('Monte Carlo Trajectories (30 Runs)')
+    ax.set_zlabel('Relative Z (m)')
+    ax.set_title(f'Monte Carlo Trajectories ({len(all_runs_data)} Runs)')
     ax.legend()
     
     plot_path = os.path.join(output_folder, 'mc_all_trajectories.png')
@@ -259,12 +378,15 @@ if __name__ == "__main__":
     model_path = "models\\ppo_inspector_crawl.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=200)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)
         plot_interactive_trajectories(all_runs_data, summary_df, output_folder)
         plot_summary_table(summary_df, output_folder)
+        
+        # ---> ADD THE NEW FUNCTION CALL HERE <---
+        plot_mc_distributions(all_runs_data, summary_df, output_folder)
 
     # Trim down to worst run
     worst_run_id = summary_df.sort_values(by="total_reward", ascending=True).iloc[0]["run_id"] #type: ignore
@@ -275,7 +397,6 @@ if __name__ == "__main__":
 
     # Process data and save
     processed_data = process_sim_data(worst_rin_df)
-    processed_data.to_csv(os.path.join(output_folder, f"processed_run_{worst_run_id}.csv"), index=False)
 
     # Note: Removed 'run_id=best_run_id' to fix TypeError
     animate_results(processed_data, output_folder)

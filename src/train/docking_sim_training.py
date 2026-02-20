@@ -33,7 +33,10 @@ from resources import (
     rel_range_log_weight,
     docking_reward,
     max_range_penalty,
-    R_EARTH
+    R_EARTH,
+    learning_rate,
+    entropy_coeff,
+    max_grad_norm,
 )
 
 # Set BSK logging level
@@ -123,7 +126,7 @@ class InspectorSat(sats.Satellite):
     fsw_type = types.new_class("FSW", (fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))
 
 
-class SB3_BKS_env(gym.Env):
+class Sb3BksEnv(gym.Env):
     def __init__(self, env, agent_name="Inspector"):
         self.env = env
         self.agent_name = agent_name
@@ -200,7 +203,7 @@ def sat_arg_randomizer(satellites):
         relative_randomizer = relative_to_chief(
             chief_name="RSO", chief_orbit=chief_orbit,
             deputy_relative_state={
-                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(5000, 100), random_unit_vector() * np.random.uniform(0, 0.01))),
+                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(4000, 100), random_unit_vector() * np.random.uniform(0, 0.01))),
             },
         )
         args.update(relative_randomizer([rso, inspector]))
@@ -273,7 +276,7 @@ if __name__ == "__main__":
         log_level="ERROR",
     )
 
-    env_sb3 = SB3_BKS_env(env)
+    env_sb3 = Sb3BksEnv(env)
     env_sb3 = Monitor(env_sb3) # Aligned with multi-core (Crucial for SB3 logging)
     env_sb3 = FlattenObservation(env_sb3)
     env_sb3_vec = DummyVecEnv([lambda: env_sb3])
@@ -285,8 +288,9 @@ if __name__ == "__main__":
         device="cpu",
         n_steps=2048,
         batch_size=64,
-        learning_rate=8e-4,
-        max_grad_norm=1,
+        learning_rate=learning_rate,
+        ent_coef=entropy_coeff,
+        max_grad_norm=max_grad_norm,
     )
 
     # sim_logger = SimulationLoggerCallback(save_freq=50) # Flushes CSV every 50 updates

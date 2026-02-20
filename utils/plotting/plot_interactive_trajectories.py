@@ -19,15 +19,15 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
 
     success_plotted = False
     fail_plotted = False
+    start_plotted = False # <--- Add this flag
 
     # 2. Loop through each run and plot the trajectory
     for idx, run_df in enumerate(all_runs_data):
         is_success = summary_df.loc[idx, "success"]
         
-        color = '#00CC96' if is_success else '#EF553B' # Plotly's nice green/red
+        color = '#00CC96' if is_success else '#EF553B' 
         opacity = 0.8 if is_success else 0.4
         
-        # Group the legends so we only have one "Success" and one "Fail" item
         if is_success and not success_plotted:
             show_legend = True
             legend_name = "Successful Approach"
@@ -51,19 +51,25 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
             name=legend_name,
             legendgroup=legend_name,
             showlegend=show_legend,
-            hoverinfo='skip' # Keeps the hover box clean
+            hoverinfo='skip' 
         ))
 
-        # Add a small dot for the starting position
+        # --- Updated Start Position Logic ---
+        # Only show legend for the very first blue dot
+        show_start_legend = False
+        if not start_plotted:
+            show_start_legend = True
+            start_plotted = True
+
         fig.add_trace(go.Scatter3d(
             x=[run_df["hill_x"].iloc[0]], 
             y=[run_df["hill_y"].iloc[0]], 
             z=[run_df["hill_z"].iloc[0]],
             mode='markers',
-            marker=dict(size=3, color='blue', opacity=0.5),
-            name="Start Pos",
-            legendgroup=legend_name,
-            showlegend=False,
+            marker=dict(size=4, color='blue', opacity=0.7),
+            name="Initial Position", # <--- Cleaned up name
+            legendgroup="initial_pos", # <--- Separate group for clarity
+            showlegend=show_start_legend,
             hovertext=f"Run {idx + 1} Start",
             hoverinfo="text"
         ))
@@ -78,18 +84,16 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
             xaxis=dict(gridcolor='gray', showbackground=False),
             yaxis=dict(gridcolor='gray', showbackground=False),
             zaxis=dict(gridcolor='gray', showbackground=False),
-            aspectmode='data' # Keeps the 3D scale proportional!
+            aspectmode='data'
         ),
-        paper_bgcolor='black', # Space theme!
+        paper_bgcolor='black',
         plot_bgcolor='black',
         font=dict(color='white'),
         legend=dict(x=0.02, y=0.98, bgcolor='rgba(0,0,0,0.5)')
     )
 
-    # 4. Save and automatically open in the browser
+    # 4. Save and automatically open
     plot_path = os.path.join(output_folder, 'interactive_trajectories.html')
     fig.write_html(plot_path)
     print(f"Saved interactive plot to: {plot_path}")
-    
-    # Auto-open in your default web browser
     webbrowser.open('file://' + os.path.realpath(plot_path))

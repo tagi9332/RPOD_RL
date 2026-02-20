@@ -27,7 +27,7 @@ from src.train import (
     inspector_sat_args,
     RSOSat,
     InspectorSat,
-    SB3_BKS_env,
+    Sb3BksEnv,
     sat_arg_randomizer
 ) 
 
@@ -43,6 +43,9 @@ from src.weight_scheduler import CurriculumPenalty
 from resources import (
     dv_reward_weight,
     rel_range_log_weight,
+    learning_rate,
+    entropy_coeff,
+    max_grad_norm,
 )
 
 def make_env(rank: int, seed: int = 0):
@@ -60,13 +63,12 @@ def make_env(rank: int, seed: int = 0):
             n_points=100, radius=1.0, theta_max=np.radians(30), 
             range_max=250, theta_solar_max=np.radians(60)
         )
-
+        max_episodes=total_timesteps // num_cpu // n_steps_per_env
         rewarders = (
             data.ResourceReward(
                 resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0,
                 
                 # Curriculum Penalty: starts small to allow early exploration, then ramps up to the full penalty
-                max_episodes=total_timesteps // num_cpu // n_steps_per_env
                 reward_weight=CurriculumPenalty(start_weight=dv_reward_weight, end_weight=1.0, max_episodes=max_episodes)
             ),
             RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
@@ -83,7 +85,7 @@ def make_env(rank: int, seed: int = 0):
             log_level="ERROR", 
         )
 
-        env_sb3 = SB3_BKS_env(env)
+        env_sb3 = Sb3BksEnv(env)
         env_sb3 = Monitor(env_sb3)
         env_sb3 = FlattenObservation(env_sb3)
         
@@ -119,7 +121,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = False  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = "ppo_inspector_final" # Exclude the .zip extension
+    LOAD_PATH = "ppo_inspector_crawl" # Exclude the .zip extension
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH + ".zip"):
@@ -140,9 +142,9 @@ if __name__ == "__main__":
             device="cpu",
             n_steps=n_steps_per_env,
             batch_size=1024,  
-            learning_rate=3e-4,
-            ent_coef=0.02,
-            max_grad_norm=0.5,
+            learning_rate=learning_rate,
+            ent_coef=entropy_coeff,
+            max_grad_norm=max_grad_norm,
         )
         
     model.set_logger(new_logger)
@@ -179,5 +181,5 @@ if __name__ == "__main__":
     
     finally:
         # Final Save
-        model.save("ppo_inspector_v3")
+        model.save("ppo_inspector_final")
         print("Training Complete. Model and Logs saved.")

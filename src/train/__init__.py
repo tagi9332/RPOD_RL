@@ -3,7 +3,7 @@ from .docking_sim_training import (
     inspector_sat_args,
     RSOSat,
     InspectorSat,
-    SB3_BKS_env,
+    Sb3BksEnv,
     sat_arg_randomizer,
     SimulationLoggerCallback
 )
