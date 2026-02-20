@@ -203,8 +203,8 @@ results/
 # Pycache files
 __pycache__/
 
-# Models
-models/
-
 # Training logs
 logs/
+
+# # Models
+# models/
