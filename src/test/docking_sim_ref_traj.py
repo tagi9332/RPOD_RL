@@ -27,11 +27,13 @@ from src.rewarders import (
 )
 
 # Local plotting scripts
-from utils.plotting.plot_results import plot_control_analysis, plot_trajectory_analysis
-from utils.plotting.animate_results import animate_results
-from utils.plotting.process_sim_data import process_sim_data
-from utils.plotting.plot_interactive_trajectories import plot_interactive_trajectories
-
+from utils.plotting import (
+    animate_results,
+    plot_control_analysis,
+    plot_trajectory_analysis,
+    process_sim_data,
+    plot_interactive_trajectories
+)
 # Import weights
 from resources import (
     dv_reward_weight,
@@ -41,7 +43,7 @@ from resources import (
 # Set BSK logging level
 bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
 
-# --- 1. Custom Inference Wrapper ---
+# Inference environment wrapper
 class InferenceEnv(SB3_BKS_env):
     """
     Inherits the exact step/reset logic from the training environment, 
@@ -93,7 +95,7 @@ class InferenceEnv(SB3_BKS_env):
         
         return obs, reward, terminated, truncated, info
 
-# --- 2. Plotting Functions ---
+# Plotting functions
 def plot_all_trajectories(all_runs_data, summary_df, output_folder):
     print("Generating 3D Multi-Trajectory Plot...")
     fig = plt.figure(figsize=(10, 10))

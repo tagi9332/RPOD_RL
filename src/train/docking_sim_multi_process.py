@@ -66,7 +66,8 @@ def make_env(rank: int, seed: int = 0):
                 resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0,
                 
                 # Curriculum Penalty: starts small to allow early exploration, then ramps up to the full penalty
-                reward_weight=CurriculumPenalty(start_weight=dv_reward_weight, end_weight=1.0, max_episodes=total_timesteps // num_cpu // n_steps_per_env)
+                max_episodes=total_timesteps // num_cpu // n_steps_per_env
+                reward_weight=CurriculumPenalty(start_weight=dv_reward_weight, end_weight=1.0, max_episodes=max_episodes)
             ),
             RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
 
@@ -149,17 +150,18 @@ if __name__ == "__main__":
     # Callbacks
     time_callback = TimeRemainingCallback(total_steps=int(total_timesteps))
 
+    eval_freq = max(50000 // num_cpu, 1)
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=model_path,
         log_path=log_dir,
-        eval_freq=max(10000 // num_cpu, 1),
+        eval_freq=eval_freq,
         deterministic=True,      # Tests the actual policy, no random thruster noise
         n_eval_episodes=5,       # Tests 5 different random starting positions
         render=False
     )
 
-    checkpointcallback = CheckpointCallback(save_freq=max(50000 // num_cpu, 1), save_path=model_path, name_prefix="ppo_inspector_multicore_checkpoint")
+    checkpointcallback = CheckpointCallback(save_freq=eval_freq, save_path=model_path, name_prefix="ppo_inspector_multicore_checkpoint")
 
     # Combine them into a list
     callbacks = CallbackList([eval_callback, time_callback, checkpointcallback])

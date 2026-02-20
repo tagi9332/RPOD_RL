@@ -5,7 +5,7 @@
 This project trains an autonomous "Inspector" satellite agent to perform orbital rendezvous and docking with a Resident Space Object (RSO). It integrates the high-fidelity **Basilisk** astrodynamics framework with **Stable Baselines 3** (SB3) using a custom Gymnasium environment.
 
 ## Prerequisites
-* **Python:** `3.12.12` (managed via `.python-version`)
+* **Python:** `3.12.12`
 
 ## Installation
 1. **Clone the repository:**
