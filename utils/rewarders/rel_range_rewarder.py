@@ -102,39 +102,3 @@ class RelativeRangeLogReward(GlobalReward):
                 reward[sat_id] = 0.0
     
         return {k: v for k, v in reward.items() if "Inspector" in k}
-
-class RelativeCosineReward(GlobalReward):
-    """Rewards the agent for moving directly toward the RSO."""
-    data_store_type = RelativeRangeDataStore
-
-    def __init__(self, weight: float = 1.0):
-        super().__init__()
-        self.weight = weight
-
-    def calculate_reward(self, new_data_dict: Mapping[str, Data]) -> dict[str, float]:
-        reward = {}
-        for sat_id, data in new_data_dict.items():
-            if "Inspector" in sat_id and isinstance(data, RelativeRangeData):
-                state = data.state_vector
-                pos = state[:3]      # Relative Position (Inspector to RSO)
-                vel = state[3:]      # Relative Velocity
-                
-                # Cosine Similarity = (A . B) / (||A|| * ||B||)
-                pos_norm = np.linalg.norm(pos)
-                vel_norm = np.linalg.norm(vel)
-                
-                if pos_norm > 1e-3 and vel_norm > 1e-4:
-                    # -1 means moving directly toward, +1 means moving away
-                    # We negate it so moving TOWARD gives +1.0
-                    cos_theta = -np.dot(pos, vel) / (pos_norm * vel_norm)
-                    
-                    # Debug prints
-                    logger.debug(f"Cosine Reward Calculation for {sat_id}: pos={pos}, vel={vel}, cos_theta={cos_theta}")
-                    
-                    # We only reward if moving toward (cos_theta > 0)
-                    # This prevents rewarding "drifting away"
-                    reward[sat_id] = float(self.weight * max(0, cos_theta))
-                else:
-                    reward[sat_id] = 0.0
-        return reward
-    

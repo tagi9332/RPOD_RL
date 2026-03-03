@@ -24,8 +24,9 @@ from src.train import (
 )
 
 # Import custom rewarders
-from src.rewarders import (
-    RelativeRangeLogReward
+from utils.rewarders import (
+    RelativeRangeLogReward,
+    DockingCorridorReward
 )
 
 # Local plotting scripts
@@ -39,7 +40,9 @@ from utils.plotting import (
 # Import weights
 from resources import (
     dv_reward_weight,
-    rel_range_log_weight
+    rel_range_log_weight,
+    docking_corridor_weight,
+    docking_corridor_angle_deg,
 )
 
 # Set BSK logging level
@@ -74,6 +77,25 @@ class InferenceEnv(Sb3BksEnv):
         sigma_BN = np.array(inspector.dynamics.sigma_BN)
         dcm_BN = rbk.MRP2C(sigma_BN)
 
+        # Compute approach angle for docking corridor reward
+        rso_sigma_BN = np.array(rso.dynamics.sigma_BN)
+        dcm_BN = rbk.MRP2C(rso_sigma_BN)
+        r_rel_N = insp_r_N - rso_r_N
+        dist = np.linalg.norm(r_rel_N)
+
+        if dist > 1e-6:
+            r_rel_B_hat = np.dot(dcm_BN, r_rel_N / dist)
+            boresight_B = np.array([0.0, 0.0, 1.0]) # Assuming Z-axis docking port
+            approach_angle_rad = np.arccos(np.clip(np.dot(r_rel_B_hat, boresight_B), -1.0, 1.0))
+            approach_angle_deg = np.degrees(approach_angle_rad)
+        else:
+            approach_angle_deg = 0.0
+        # ----------------------------------------------------------------------------
+
+        # (Your existing pointing error / hardware metric code stays here)
+        sigma_BN = np.array(inspector.dynamics.sigma_BN)
+        dcm_BN_insp = rbk.MRP2C(sigma_BN)
+
         # Compute pointing error
         r_Rel_N = rso_r_N - insp_r_N
         dist = np.linalg.norm(r_Rel_N)
@@ -92,6 +114,7 @@ class InferenceEnv(Sb3BksEnv):
             info["metrics"]["pointing_error"] = pointing_error_rad
             info["metrics"]["torque_cmd"] = insp_torque_cmd
             info["metrics"]["wheel_speeds"] = wheel_speeds
+            info["metrics"]["approach_angle_deg"] = approach_angle_deg
             # Extract Fuel Remaining
             info["metrics"]["dV_remaining"] = inspector.fsw.dv_available if hasattr(inspector.fsw, 'dv_available') else 0.0
         
@@ -282,6 +305,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     rewarders = (
         data.ResourceReward(resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0, reward_weight=dv_reward_weight),
         RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
+        DockingCorridorReward(weight=docking_corridor_weight, docking_port_boresight=np.array([0.0, 0.0, 1.0]), cutoff_range=1000),
     )
 
     print("Initializing Environment...")
@@ -345,14 +369,26 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         run_df = pd.DataFrame(run_data_log)
         all_runs_data.append(run_df)
         
-        sim_rate = env_sb3.unwrapped.sim_rate #type: ignore
+        sim_rate = env_sb3.unwrapped.sim_rate 
         total_sim_time = len(run_df) * sim_rate
         final_dist = np.linalg.norm([run_df.iloc[-1]["hill_x"], run_df.iloc[-1]["hill_y"], run_df.iloc[-1]["hill_z"]])
-        success = bool(run_df.iloc[-1].get("docked_state", False))
         
-        if success: end_status = "Conjunction (Docked)"
-        elif len(run_df) >= (6000 / sim_rate): end_status = "Timeout"
-        else: end_status = "Fuel Exhausted / Boundary Viol."
+        # --- NEW SUCCESS LOGIC ---
+        conjunction = bool(run_df.iloc[-1].get("docked_state", False))
+        final_angle = run_df.iloc[-1].get("approach_angle_deg", 180.0)
+        
+        # Success is strictly a conjunction WITHIN the cone limit
+        success = conjunction and (final_angle <= docking_corridor_angle_deg)
+        
+        if success: 
+            end_status = f"Docked ({final_angle:.1f}°)"
+        elif conjunction: 
+            end_status = f"Collision ({final_angle:.1f}°)"
+        elif len(run_df) >= (6000 / sim_rate): 
+            end_status = "Timeout"
+        else: 
+            end_status = "Fuel Exhausted / Bounds Viol."
+        # -------------------------
 
         summary_stats.append({
             "run_id": run_idx + 1, "total_reward": total_reward, "episode_length": len(run_df),
@@ -375,10 +411,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = "models\\ppo_inspector_crawl.zip"
+    model_path = "models\\training_run_2026-03-03_12-38-04\\best_model.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=200)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)

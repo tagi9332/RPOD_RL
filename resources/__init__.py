@@ -4,6 +4,9 @@ from .weights import (
     rel_range_log_weight,
     docking_reward,
     max_range_penalty,
+    docking_corridor_weight,
+    docking_corridor_angle_deg,
+    conjunction_penalty
 
 )
 from .hyperparameters import (

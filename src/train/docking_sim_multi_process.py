@@ -32,8 +32,9 @@ from src.train import (
 ) 
 
 # Import custom rewarders
-from src.rewarders import (
-    RelativeRangeLogReward
+from utils.rewarders import (
+    RelativeRangeLogReward,
+    DockingCorridorReward
 )
 
 # Import weight scheduler
@@ -43,6 +44,7 @@ from src.weight_scheduler import CurriculumPenalty
 from resources import (
     dv_reward_weight,
     rel_range_log_weight,
+    docking_corridor_weight,
     learning_rate,
     entropy_coeff,
     max_grad_norm,
@@ -72,6 +74,9 @@ def make_env(rank: int, seed: int = 0):
                 reward_weight=CurriculumPenalty(start_weight=dv_reward_weight, end_weight=1.0, max_episodes=max_episodes)
             ),
             RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
+
+            DockingCorridorReward(weight=docking_corridor_weight, docking_port_boresight=np.array([0.0, 0.0, 1.0]), cutoff_range=1000),
+
 
         )
 
@@ -110,7 +115,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 500_000 
+    total_timesteps = 1_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
@@ -120,11 +125,11 @@ if __name__ == "__main__":
     
     # ------------------------- Model Initialization -------------------------
     # Initialize model
-    LOAD_MODEL = False  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = "ppo_inspector_crawl" # Exclude the .zip extension
+    LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
+    LOAD_PATH = "models/rpo_large_obs_spec.zip"
     # -------------------------------------------------------------------------
 
-    if LOAD_MODEL and os.path.exists(LOAD_PATH + ".zip"):
+    if LOAD_MODEL and os.path.exists(LOAD_PATH):
         print(f"Loading existing model from {LOAD_PATH}...")
         # Load the model and bind it to your new multi-core environment
         model = PPO.load(
@@ -181,5 +186,6 @@ if __name__ == "__main__":
     
     finally:
         # Final Save
-        model.save("ppo_inspector_final")
-        print("Training Complete. Model and Logs saved.")
+        model_save_path = os.path.join(model_path, "rpo_large_obs_spec.zip")
+        model.save(model_save_path)
+        print(f"Training Complete. Model saved as {model_save_path}")

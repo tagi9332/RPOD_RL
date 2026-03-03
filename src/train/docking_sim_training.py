@@ -8,6 +8,7 @@ import os
 from Basilisk.utilities.orbitalMotion import elem2rv
 from Basilisk.utilities.RigidBodyKinematics import C2MRP
 from Basilisk.architecture import bskLogging
+from Basilisk.utilities import RigidBodyKinematics as rbk
 
 # BSK-RL framework
 from bsk_rl import sats, obs, act, ConstellationTasking, scene, data
@@ -20,11 +21,18 @@ from gymnasium.wrappers import FlattenObservation
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.monitor import Monitor\
+
+# Import custom observations
+from utils.observations import (
+    custom_sigma_DC,
+    custom_r_DC_C,
+)
 
 # Import custom rewarders
-from src.rewarders import (
-    RelativeRangeLogReward
+from utils.rewarders import (
+    RelativeRangeLogReward,
+    DockingCorridorReward,
 )
 
 # Import weights
@@ -33,10 +41,13 @@ from resources import (
     rel_range_log_weight,
     docking_reward,
     max_range_penalty,
+    docking_corridor_weight,
+    conjunction_penalty,
     R_EARTH,
     learning_rate,
     entropy_coeff,
     max_grad_norm,
+    docking_corridor_angle_deg
 )
 
 # Set BSK logging level
@@ -63,7 +74,7 @@ inspector_sat_args = dict(
     dataStorageCapacity=1e6,
     batteryStorageCapacity=1e12,
     storedCharge_Init=1e12,
-    conjunction_radius=50.0,
+    conjunction_radius=30,
     dv_available_init=150,
     max_range_radius=5000,
     chief_name="RSO",
@@ -98,23 +109,35 @@ def sun_hat_chief(self, other):
     return HN @ r_SB_N_hat
 
 class InspectorSat(sats.Satellite):
+    # observation_spec = [
+    #     # Trimmed observation spec
+    #     obs.SatProperties(
+    #         dict(prop="dv_available", norm=50),
+    #     ),
+    #     obs.ResourceRewardWeight(),
+    #     obs.RelativeProperties(
+    #         dict(prop="r_DC_Hc", norm=500), 
+    #         dict(prop="v_DC_Hc", norm=5), 
+    #         chief_name="RSO",
+    #     ),
+    # ]
     observation_spec = [
-        # Trimmed observation spec from previous discussion
+        # Full observation spec
         obs.SatProperties(
             dict(prop="dv_available", norm=50),
             # dict(prop="eccentricity", norm=0.1),
-            # dict(prop="semi_major_axis", norm=7000),
-            # dict(prop="true_anomaly", norm=2 * np.pi),
+            # dict(prop="semi_major_axis", norm=35786.0*1000),
         ),
         obs.ResourceRewardWeight(),
         obs.RelativeProperties(
-            dict(prop="r_DC_Hc", norm=500), 
+            dict(prop="r_DC_Hc", norm=500),
             dict(prop="v_DC_Hc", norm=5), 
-            # dict(prop="sun_hat_Hc", fn=sun_hat_chief), 
+            dict(prop="r_DC_C", fn=custom_r_DC_C, norm=500),
+            dict(prop="sun_hat_Hc", fn=sun_hat_chief),
             chief_name="RSO",
         ),
-        # obs.Eclipse(norm=5700), 
-        # obs.Time(norm=3000), # Normalize time to episode length
+        # obs.Eclipse(norm=1.0), 
+        obs.Time(norm=3000), # Normalize time to episode length
     ]
     action_spec = [
         act.ImpulsiveThrustHill(
@@ -159,10 +182,37 @@ class Sb3BksEnv(gym.Env):
         if hasattr(inspector_sat.dynamics, 'conjunctions') and inspector_sat.dynamics.conjunctions:
             info["conjunction"] = True
             info["conjunction_with"] = [sat.name for sat in inspector_sat.dynamics.conjunctions]
-            reward_dict[self.agent_name] += docking_reward  # Large positive reward for conjunction
+            
+            # Get RSO attitude and convert to Direction Cosine Matrix (Inertial -> Body)
+            rso_sigma_BN = np.array(rso_sat.dynamics.sigma_BN)
+            dcm_BN = rbk.MRP2C(rso_sigma_BN) 
+            
+            # Calculate the relative position vector (pointing FROM RSO TO Inspector)
+            r_rel_N = inspector_r_N - rso_r_N 
+            dist = np.linalg.norm(r_rel_N)
+            
+            if dist > 1e-6:
+                # Rotate the normalized relative position into the RSO Body Frame
+                r_rel_N_hat = r_rel_N / dist
+                r_rel_B_hat = np.dot(dcm_BN, r_rel_N_hat)
+                
+                # Define your docking port boresight (assuming Z-axis here)
+                boresight_B = np.array([0.0, 0.0, 1.0]) 
+                
+                # Calculate the angle between the inspector's position and the boresight
+                cos_theta = np.dot(r_rel_B_hat, boresight_B)
+                angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+                angle_deg = np.degrees(angle_rad)
+                
+                # Apply Sparse Reward based on the docking angle cone
+                if angle_deg <= docking_corridor_angle_deg:
+                    reward_dict[self.agent_name] += docking_reward
+                    inspector_sat.logger.info(f"SUCCESSFUL DOCKING! Angle: {angle_deg:.2f} deg at sim time {self.env.simulator.sim_time:.2f}s")
+                else:
+                    # Optional: Apply a crash penalty if it hits the wrong side of the RSO
+                    reward_dict[self.agent_name] += conjunction_penalty 
+                    inspector_sat.logger.info(f"FAILED DOCKING (Collision). Angle: {angle_deg:.2f} deg at sim time {self.env.simulator.sim_time:.2f}s")
 
-            # Logger print
-            inspector_sat.logger.info(f"Conjunction occurred with {[sat.name for sat in inspector_sat.dynamics.conjunctions]} at sim time {self.env.simulator.sim_time:.2f} seconds")
             inspector_sat.logger.info(f"final episode reward: {reward_dict[self.agent_name]:.4f}")
 
         # Check max range violation
@@ -203,7 +253,7 @@ def sat_arg_randomizer(satellites):
         relative_randomizer = relative_to_chief(
             chief_name="RSO", chief_orbit=chief_orbit,
             deputy_relative_state={
-                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(4000, 100), random_unit_vector() * np.random.uniform(0, 0.01))),
+                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(500, 2000), random_unit_vector() * np.random.uniform(0, 0.01))),
             },
         )
         args.update(relative_randomizer([rso, inspector]))
@@ -261,6 +311,9 @@ if __name__ == "__main__":
             reward_weight=dv_reward_weight, 
         ),
         RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
+
+        DockingCorridorReward(weight=docking_corridor_weight, docking_port_boresight=np.array([0.0, 0.0, 1.0]), cutoff_range=1000),
+
     )
 
     rso = RSOSat("RSO", sat_args=rso_sat_args)
