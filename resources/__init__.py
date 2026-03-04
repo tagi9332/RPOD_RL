@@ -6,11 +6,13 @@ from .weights import (
     max_range_penalty,
     docking_corridor_weight,
     docking_corridor_angle_deg,
-    conjunction_penalty
+    conjunction_penalty,
+    time_penalty_weight
 
 )
 from .hyperparameters import (
     learning_rate,
     entropy_coeff,
     max_grad_norm,
+    clip_range
 )

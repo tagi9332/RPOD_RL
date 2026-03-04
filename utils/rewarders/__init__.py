@@ -1,2 +1,5 @@
 from utils.rewarders.rel_range_rewarder import RelativeRangeLogReward, RelativeRangeDataStore, RelativeRangeData
 from utils.rewarders.docking_corridor_rewarder import DockingCorridorReward, DockingCorridorDataStore, DockingCorridorData
+from utils.rewarders.quadratic_time_penalty import QuadraticTimePenalty, TimeDataStore, TimeData
+
+from utils.rewarders.rewarders import get_rewarders

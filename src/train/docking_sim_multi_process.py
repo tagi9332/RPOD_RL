@@ -31,20 +31,14 @@ from src.train import (
     sat_arg_randomizer
 ) 
 
-# Import custom rewarders
-from utils.rewarders import (
-    RelativeRangeLogReward,
-    DockingCorridorReward
-)
+# Import rewarders
+from utils.rewarders import get_rewarders
 
 # Import weight scheduler
 from src.weight_scheduler import CurriculumPenalty
 
 # Import weights
 from resources import (
-    dv_reward_weight,
-    rel_range_log_weight,
-    docking_corridor_weight,
     learning_rate,
     entropy_coeff,
     max_grad_norm,
@@ -66,19 +60,8 @@ def make_env(rank: int, seed: int = 0):
             range_max=250, theta_solar_max=np.radians(60)
         )
         max_episodes=total_timesteps // num_cpu // n_steps_per_env
-        rewarders = (
-            data.ResourceReward(
-                resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0,
-                
-                # Curriculum Penalty: starts small to allow early exploration, then ramps up to the full penalty
-                reward_weight=CurriculumPenalty(start_weight=dv_reward_weight, end_weight=1.0, max_episodes=max_episodes)
-            ),
-            RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
 
-            DockingCorridorReward(weight=docking_corridor_weight, docking_port_boresight=np.array([0.0, 0.0, 1.0]), cutoff_range=1000),
-
-
-        )
+        rewarders = get_rewarders()
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -126,7 +109,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = "models/rpo_large_obs_spec.zip"
+    LOAD_PATH = r"models\rpo_large_obs_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):

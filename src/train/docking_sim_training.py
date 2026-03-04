@@ -29,25 +29,20 @@ from utils.observations import (
     custom_r_DC_C,
 )
 
-# Import custom rewarders
-from utils.rewarders import (
-    RelativeRangeLogReward,
-    DockingCorridorReward,
-)
+# Import custom rewarder function
+from utils.rewarders import get_rewarders
 
 # Import weights
 from resources import (
-    dv_reward_weight,
-    rel_range_log_weight,
     docking_reward,
     max_range_penalty,
-    docking_corridor_weight,
     conjunction_penalty,
     R_EARTH,
     learning_rate,
     entropy_coeff,
     max_grad_norm,
-    docking_corridor_angle_deg
+    docking_corridor_angle_deg,
+    clip_range
 )
 
 # Set BSK logging level
@@ -305,16 +300,8 @@ class SimulationLoggerCallback(BaseCallback):
 if __name__ == "__main__":
     scenario = scene.SphericalRSO(n_points=100, radius=1.0, theta_max=np.radians(30), range_max=250, theta_solar_max=np.radians(60))
 
-    rewarders = (
-        data.ResourceReward(
-            resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0,
-            reward_weight=dv_reward_weight, 
-        ),
-        RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
-
-        DockingCorridorReward(weight=docking_corridor_weight, docking_port_boresight=np.array([0.0, 0.0, 1.0]), cutoff_range=1000),
-
-    )
+    # Rewarder function (returns the tuple of rewarders to use in the environment)
+    rewarders = get_rewarders()
 
     rso = RSOSat("RSO", sat_args=rso_sat_args)
     inspector = InspectorSat("Inspector", sat_args=inspector_sat_args)
@@ -341,6 +328,7 @@ if __name__ == "__main__":
         device="cpu",
         n_steps=2048,
         batch_size=64,
+        clip_range=clip_range,
         learning_rate=learning_rate,
         ent_coef=entropy_coeff,
         max_grad_norm=max_grad_norm,

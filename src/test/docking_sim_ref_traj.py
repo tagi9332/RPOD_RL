@@ -24,10 +24,7 @@ from src.train import (
 )
 
 # Import custom rewarders
-from utils.rewarders import (
-    RelativeRangeLogReward,
-    DockingCorridorReward
-)
+from utils.rewarders import get_rewarders
 
 # Local plotting scripts
 from utils.plotting import (
@@ -39,9 +36,6 @@ from utils.plotting import (
 )
 # Import weights
 from resources import (
-    dv_reward_weight,
-    rel_range_log_weight,
-    docking_corridor_weight,
     docking_corridor_angle_deg,
 )
 
@@ -302,11 +296,7 @@ def plot_summary_table(summary_df, output_folder):
 def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     scenario = scene.SphericalRSO(n_points=100, radius=1.0, theta_max=np.radians(30), range_max=250, theta_solar_max=np.radians(60))
     
-    rewarders = (
-        data.ResourceReward(resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0, reward_weight=dv_reward_weight),
-        RelativeRangeLogReward(alpha=rel_range_log_weight, delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])),
-        DockingCorridorReward(weight=docking_corridor_weight, docking_port_boresight=np.array([0.0, 0.0, 1.0]), cutoff_range=1000),
-    )
+    rewarders = get_rewarders()
 
     print("Initializing Environment...")
     env = ConstellationTasking(
@@ -411,7 +401,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = "models\\training_run_2026-03-03_12-38-04\\best_model.zip"
+    model_path = r"models\training_run_2026-03-03_17-23-58\rpo_large_obs_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
@@ -426,13 +416,13 @@ if __name__ == "__main__":
 
     # Trim down to worst run
     worst_run_id = summary_df.sort_values(by="total_reward", ascending=True).iloc[0]["run_id"] #type: ignore
-    worst_rin_df = all_runs_data[worst_run_id - 1]  # Adjust for 0-indexing #type: ignore
+    worst_run_df = all_runs_data[worst_run_id - 1]  # Adjust for 0-indexing #type: ignore
     best_run_id = summary_df.sort_values(by="total_reward", ascending=False).iloc[0]["run_id"] #type: ignore
     best_run_df = all_runs_data[best_run_id - 1]  # Adjust for 0-indexing #type: ignore
 
 
     # Process data and save
-    processed_data = process_sim_data(worst_rin_df)
+    processed_data = process_sim_data(best_run_df)
 
     # Note: Removed 'run_id=best_run_id' to fix TypeError
     animate_results(processed_data, output_folder)
