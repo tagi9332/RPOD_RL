@@ -76,11 +76,11 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
 
     # 3. Format the Layout
     fig.update_layout(
-        title="Interactive Monte Carlo Trajectories",
+        title="Monte Carlo Trajectories",
         scene=dict(
-            xaxis_title='Relative X (m)',
-            yaxis_title='Relative Y (m)',
-            zaxis_title='Relative Z (m)',
+            xaxis_title='Radial X (m)',
+            yaxis_title='In-Track Y (m)',
+            zaxis_title='Cross-Track Z (m)',
             xaxis=dict(gridcolor='gray', showbackground=False),
             yaxis=dict(gridcolor='gray', showbackground=False),
             zaxis=dict(gridcolor='gray', showbackground=False),

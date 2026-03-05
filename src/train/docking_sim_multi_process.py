@@ -44,6 +44,12 @@ from resources import (
     max_grad_norm,
 )
 
+# Import sim parameters
+from resources import (
+    SIM_TIME,
+    SIM_DT,
+)
+
 def make_env(rank: int, seed: int = 0):
     """
     Utility function for multiprocessed env.
@@ -68,8 +74,8 @@ def make_env(rank: int, seed: int = 0):
             sat_arg_randomizer=sat_arg_randomizer,
             scenario=scenario,
             rewarder=rewarders,
-            time_limit=5000,
-            sim_rate=1.0,
+            time_limit=SIM_TIME,
+            sim_rate=SIM_DT,
             log_level="ERROR", 
         )
 
@@ -109,7 +115,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\rpo_large_obs_spec.zip"
+    LOAD_PATH = r"models\100p_success_30deg.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):

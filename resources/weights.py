@@ -17,7 +17,7 @@ docking_corridor_weight=0.001
 time_penalty_weight=-0.005
 
 # Docking Corridor Angle (degrees)
-docking_corridor_angle_deg=60
+docking_corridor_angle_deg=30
 
 # Conjunction Penalty
 conjunction_penalty=-20

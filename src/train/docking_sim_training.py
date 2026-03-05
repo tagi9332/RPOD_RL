@@ -48,32 +48,18 @@ from resources import (
 # Set BSK logging level
 bskLogging.setDefaultLogLevel(bskLogging.BSK_WARNING)
 
-
-# --- CONFIGURATION DICTIONARIES ---
-rso_sat_args = dict(
-    conjunction_radius=2.0,
-    K=7.0 / 20,
-    P=35.0 / 20,
-    Ki=1e-6,
-    dragCoeff=0.0,
-    batteryStorageCapacity=1e9, 
-    storedCharge_Init=1e9,
-    wheelSpeeds=[0.0, 0.0, 0.0],
-    u_max=2.0,
-)
-
-inspector_sat_args = dict(
-    imageAttErrorRequirement=1.0,
-    imageRateErrorRequirement=None,
-    instrumentBaudRate=1,
-    dataStorageCapacity=1e6,
-    batteryStorageCapacity=1e12,
-    storedCharge_Init=1e12,
-    conjunction_radius=30,
-    dv_available_init=150,
-    max_range_radius=5000,
-    chief_name="RSO",
-    u_max=2.0
+# Import simulation parameters
+from resources import (
+    SIM_TIME,
+    SIM_DT,
+    MAX_REL_POS,
+    MAX_REL_VEL,
+    MIN_REL_POS,
+    MIN_REL_VEL,
+    MAX_DV,
+    MAX_DRIFT_DURATION,
+    rso_sat_args,
+    inspector_sat_args,
 )
 
 # --- CLASS DEFINITIONS ---
@@ -132,11 +118,11 @@ class InspectorSat(sats.Satellite):
             chief_name="RSO",
         ),
         # obs.Eclipse(norm=1.0), 
-        obs.Time(norm=3000), # Normalize time to episode length
+        obs.Time(norm=SIM_TIME), # Normalize time to episode length
     ]
     action_spec = [
         act.ImpulsiveThrustHill(
-            chief_name="RSO", max_dv=2, max_drift_duration=20,
+            chief_name="RSO", max_dv=MAX_DV, max_drift_duration=MAX_DRIFT_DURATION,
         )
     ]
     dyn_type = types.new_class("Dyn", (dyn.MaxRangeDynModel, dyn.ConjunctionDynModel, dyn.RSOInspectorDynModel))
@@ -248,7 +234,7 @@ def sat_arg_randomizer(satellites):
         relative_randomizer = relative_to_chief(
             chief_name="RSO", chief_orbit=chief_orbit,
             deputy_relative_state={
-                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(500, 2000), random_unit_vector() * np.random.uniform(0, 0.01))),
+                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS), random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL))),
             },
         )
         args.update(relative_randomizer([rso, inspector]))
@@ -311,8 +297,8 @@ if __name__ == "__main__":
         sat_arg_randomizer=sat_arg_randomizer,
         scenario=scenario,
         rewarder=rewarders,
-        time_limit=3000,
-        sim_rate=1.0, 
+        time_limit=SIM_TIME,
+        sim_rate=SIM_DT, 
         log_level="ERROR",
     )
 

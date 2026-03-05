@@ -127,7 +127,7 @@ def animate_results(df, output_folder="results"):
     output_file = os.path.join(output_folder, 'inspector_maneuver_with_cone.gif')
     print(f"Saving animation to {output_file}...")
     try:
-        ani.save(output_file, writer='pillow', fps=20)
+        ani.save(output_file, writer='pillow', fps=10)
         print("Animation saved successfully.")
     except Exception as e:
         print(f"Could not save GIF (missing ImageMagick/Pillow?): {e}")

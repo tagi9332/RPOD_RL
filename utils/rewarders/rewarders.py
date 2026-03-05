@@ -14,7 +14,8 @@ from resources import (
     dv_reward_weight,
     rel_range_log_weight,
     docking_corridor_weight,
-    time_penalty_weight
+    time_penalty_weight,
+    SIM_TIME
 )
 
 def get_rewarders():
@@ -35,7 +36,7 @@ def get_rewarders():
         ),
         QuadraticTimePenalty(
             max_penalty=time_penalty_weight, 
-            max_sim_time=3000.0, 
+            max_sim_time=SIM_TIME, 
             power=2.0
         ),
     )

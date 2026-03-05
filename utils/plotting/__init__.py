@@ -2,3 +2,7 @@ from utils.plotting.animate_results import animate_results
 from utils.plotting.plot_results import plot_control_analysis, plot_trajectory_analysis
 from utils.plotting.process_sim_data import process_sim_data
 from utils.plotting.plot_interactive_trajectories import plot_interactive_trajectories
+from utils.plotting.plot_mc_distributions import plot_mc_distributions
+from utils.plotting.plot_all_trajectories import plot_all_trajectories
+from utils.plotting.plot_summary_table import plot_summary_table
+from utils.plotting.plot_pareto_front import plot_pareto_front

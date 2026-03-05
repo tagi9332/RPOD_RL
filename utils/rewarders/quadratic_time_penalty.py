@@ -6,6 +6,8 @@ from typing import Optional, Union, Mapping
 import numpy as np
 from bsk_rl.data.base import Data, DataStore, GlobalReward
 
+from resources import SIM_TIME
+
 logger = logging.getLogger(__name__)
 
 # 1. The Container
@@ -52,7 +54,7 @@ class QuadraticTimePenalty(GlobalReward):
     def __init__(
         self,
         max_penalty: float = -0.005,
-        max_sim_time: float = 3000.0,
+        max_sim_time: float = SIM_TIME,
         power: float = 2.0
     ):
         """
