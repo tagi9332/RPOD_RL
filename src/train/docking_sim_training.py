@@ -5,14 +5,12 @@ import pandas as pd
 import os
 
 # Basilisk core
-from Basilisk.utilities.orbitalMotion import elem2rv
-from Basilisk.utilities.RigidBodyKinematics import C2MRP
 from Basilisk.architecture import bskLogging
 from Basilisk.utilities import RigidBodyKinematics as rbk
 
 # BSK-RL framework
-from bsk_rl import sats, obs, act, ConstellationTasking, scene, data
-from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief, cd2hill
+from bsk_rl import sats, obs, act, ConstellationTasking, scene
+from bsk_rl.utils.orbital import cd2hill
 from bsk_rl.sim import dyn, fsw
 
 # RL libraries
@@ -21,7 +19,7 @@ from gymnasium.wrappers import FlattenObservation
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor\
+from stable_baselines3.common.monitor import Monitor
 
 # Import custom observations
 from utils.observations import (
@@ -31,6 +29,9 @@ from utils.observations import (
 
 # Import custom rewarder function
 from utils.rewarders import get_rewarders
+
+# Import custom satellite argument randomizer
+from utils.randomizers.sat_arg_randomizer_rso_random_inertial import sat_arg_randomizer_rso_inertial as sat_arg_randomizer
 
 # Import weights
 from resources import (
@@ -52,10 +53,6 @@ bskLogging.setDefaultLogLevel(bskLogging.BSK_WARNING)
 from resources import (
     SIM_TIME,
     SIM_DT,
-    MAX_REL_POS,
-    MAX_REL_VEL,
-    MIN_REL_POS,
-    MIN_REL_VEL,
     MAX_DV,
     MAX_DRIFT_DURATION,
     rso_sat_args,
@@ -222,36 +219,6 @@ class Sb3BksEnv(gym.Env):
         }
 
         return obs_dict[self.agent_name], reward_dict[self.agent_name], terminated_dict[self.agent_name], truncated_dict[self.agent_name], info
-
-def sat_arg_randomizer(satellites):
-    a = (R_EARTH*1000) + np.random.uniform(35776.0*1000, 35796.0*1000) # Near GEO orbit
-    e = np.random.uniform(0.0, 0.0005)
-    chief_orbit = random_orbit(a=a, e=e)
-    inspectors = [sat for sat in satellites if "Inspector" in sat.name]
-    rso = [satellite for satellite in satellites if satellite.name == "RSO"][0]
-    args = {}
-    for inspector in inspectors:
-        relative_randomizer = relative_to_chief(
-            chief_name="RSO", chief_orbit=chief_orbit,
-            deputy_relative_state={
-                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS), random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL))),
-            },
-        )
-        args.update(relative_randomizer([rso, inspector]))
-    
-    mu = rso.sat_args_generator["mu"]
-    r_N, v_N = elem2rv(mu, args[rso]["oe"])
-    r_hat = r_N / np.linalg.norm(r_N)
-    v_hat = v_N / np.linalg.norm(v_N)
-    x = r_hat
-    z = np.cross(r_hat, v_hat); z = z / np.linalg.norm(z)
-    y = np.cross(z, x)
-    HN = np.array([x, y, z]); BH = np.eye(3)
-    a = chief_orbit.a; T = np.sqrt(a**3 / mu) * 2 * np.pi # type: ignore
-    omega_BN_N = z * 2 * np.pi / T
-    args[rso]["sigma_init"] = C2MRP(BH @ HN)
-    args[rso]["omega_init"] = BH @ HN @ omega_BN_N
-    return args
 
 # Logger callback with disk flushing for RAM management
 class SimulationLoggerCallback(BaseCallback):
