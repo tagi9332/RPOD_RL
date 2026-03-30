@@ -5,14 +5,21 @@ SIM_TIME = 10800
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 2  # m/s
-MAX_DRIFT_DURATION = 20 # s
+MAX_DV = 0.2  # m/s
+MAX_DRIFT_DURATION = 2000 # s
 
 # Relative State Initialization Bounds
-MAX_REL_POS = 2000.0  # meters
+MAX_REL_POS = 505.0  # meters
 MIN_REL_POS = 500     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
+
+# --- REWARDER PARAMETERS ---
+# Approach Corridor Angle (degrees)
+approach_corridor_angle_deg=90
+
+# Phase Transition Parameters
+docking_phase_range_threshold=500
 
 # --- CONFIGURATION DICTIONARIES ---
 rso_sat_args = dict(
@@ -40,3 +47,4 @@ inspector_sat_args = dict(
     chief_name="RSO",
     u_max=2.0
 )
+

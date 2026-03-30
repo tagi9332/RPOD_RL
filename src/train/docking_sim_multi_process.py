@@ -2,6 +2,8 @@
 from datetime import datetime
 import os
 import numpy as np
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="stable_baselines3")
 
 # RL libraries
 from gymnasium.wrappers import FlattenObservation
@@ -28,8 +30,10 @@ from src.train import (
     RSOSat,
     InspectorSat,
     Sb3BksEnv,
-    sat_arg_randomizer
 ) 
+
+# Import randomizer
+from utils.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer
 
 # Import rewarders
 from utils.rewarders import get_rewarders
@@ -69,9 +73,11 @@ def make_env(rank: int, seed: int = 0):
 
         rewarders = get_rewarders()
 
+        randomizer = make_sat_arg_randomizer(mode="train")
+
         env = ConstellationTasking(
             satellites=[rso, inspector],
-            sat_arg_randomizer=sat_arg_randomizer,
+            sat_arg_randomizer=randomizer,
             scenario=scenario,
             rewarder=rewarders,
             time_limit=SIM_TIME,
@@ -115,7 +121,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\100p_success_30deg.zip"
+    LOAD_PATH = r"models\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -175,6 +181,6 @@ if __name__ == "__main__":
     
     finally:
         # Final Save
-        model_save_path = os.path.join(model_path, "rpo_large_obs_spec.zip")
+        model_save_path = os.path.join(model_path, "rpo_min_dv_spec.zip")
         model.save(model_save_path)
         print(f"Training Complete. Model saved as {model_save_path}")

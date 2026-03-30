@@ -13,7 +13,7 @@ from utils.rewarders.rel_range_rewarder import RelativeRangeLogReward
 from resources import (
     dv_reward_weight,
     rel_range_log_weight,
-    docking_corridor_weight,
+    approach_corridor_weight,
     time_penalty_weight,
     SIM_TIME
 )
@@ -30,7 +30,7 @@ def get_rewarders():
             delta_x_max=np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])
         ),
         DockingCorridorReward(
-            weight=docking_corridor_weight, 
+            weight=approach_corridor_weight, 
             docking_port_boresight=np.array([0.0, 0.0, 1.0]), 
             cutoff_range=1000
         ),

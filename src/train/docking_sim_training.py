@@ -27,11 +27,14 @@ from utils.observations import (
     custom_r_DC_C,
 )
 
+# Import custom FSW model for continuous pointing
+from src.attitude_modules.pointing_fsw import AlwaysPointFSWModel
+
 # Import custom rewarder function
 from utils.rewarders import get_rewarders
 
 # Import custom satellite argument randomizer
-from utils.randomizers.sat_arg_randomizer_rso_random_inertial import sat_arg_randomizer_rso_inertial as sat_arg_randomizer
+from utils.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer as sat_arg_randomizer
 
 # Import weights
 from resources import (
@@ -42,7 +45,7 @@ from resources import (
     learning_rate,
     entropy_coeff,
     max_grad_norm,
-    docking_corridor_angle_deg,
+    approach_corridor_angle_deg,
     clip_range
 )
 
@@ -183,7 +186,7 @@ class Sb3BksEnv(gym.Env):
                 angle_deg = np.degrees(angle_rad)
                 
                 # Apply Sparse Reward based on the docking angle cone
-                if angle_deg <= docking_corridor_angle_deg:
+                if angle_deg <= approach_corridor_angle_deg:
                     reward_dict[self.agent_name] += docking_reward
                     inspector_sat.logger.info(f"SUCCESSFUL DOCKING! Angle: {angle_deg:.2f} deg at sim time {self.env.simulator.sim_time:.2f}s")
                 else:
@@ -261,7 +264,7 @@ if __name__ == "__main__":
 
     env = ConstellationTasking(
         satellites=[rso, inspector],
-        sat_arg_randomizer=sat_arg_randomizer,
+        sat_arg_randomizer=sat_arg_randomizer(mode="train"),
         scenario=scenario,
         rewarder=rewarders,
         time_limit=SIM_TIME,
@@ -270,8 +273,8 @@ if __name__ == "__main__":
     )
 
     env_sb3 = Sb3BksEnv(env)
-    env_sb3 = Monitor(env_sb3) # Aligned with multi-core (Crucial for SB3 logging)
     env_sb3 = FlattenObservation(env_sb3)
+    env_sb3 = Monitor(env_sb3) # Aligned with multi-core (Crucial for SB3 logging)
     env_sb3_vec = DummyVecEnv([lambda: env_sb3])
 
     model = PPO(

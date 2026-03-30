@@ -5,7 +5,7 @@ import numpy as np
 from bsk_rl.data.base import Data, DataStore, GlobalReward
 from Basilisk.utilities.RigidBodyKinematics import MRP2C
 
-from resources import docking_corridor_angle_deg
+from resources import approach_corridor_angle_deg, docking_phase_range_threshold, approach_corridor_weight
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +65,10 @@ class DockingCorridorReward(GlobalReward):
 
     def __init__(
         self, 
-        weight: float = -0.01, 
+        weight: float = approach_corridor_weight, 
         docking_port_boresight: np.ndarray = np.array([0.0, 0.0, 1.0]), 
-        corridor_angle_deg: float = docking_corridor_angle_deg,
-        cutoff_range: float = 500.0
+        corridor_angle_deg: float = approach_corridor_angle_deg,
+        cutoff_range: float = docking_phase_range_threshold
     ):
         super().__init__()
         self.weight = weight

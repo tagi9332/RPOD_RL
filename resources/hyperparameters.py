@@ -2,7 +2,7 @@
 learning_rate = 3e-5
 
 # Entropy coefficient
-entropy_coeff = 0.0005
+entropy_coeff = 0.001
 
 # Max gradient norm
 max_grad_norm = 0.5

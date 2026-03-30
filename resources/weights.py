@@ -2,22 +2,19 @@
 dv_reward_weight=0.001
 
 # RelativeRangeLogReward
-rel_range_log_weight=-0.001
+rel_range_log_weight=-0.0001
 
 # Docking Reward
-docking_reward=20
+docking_reward=4
 
 # Max Range Penalty
-max_range_penalty=-20
+max_range_penalty=-3
 
 # Boresight Alignment Reward
-docking_corridor_weight=0.001
+approach_corridor_weight=0.00005
 
 # Time Penalty
 time_penalty_weight=-0.005
 
-# Docking Corridor Angle (degrees)
-docking_corridor_angle_deg=30
-
 # Conjunction Penalty
-conjunction_penalty=-20
+conjunction_penalty=-2

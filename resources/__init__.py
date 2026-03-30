@@ -4,8 +4,7 @@ from .weights import (
     rel_range_log_weight,
     docking_reward,
     max_range_penalty,
-    docking_corridor_weight,
-    docking_corridor_angle_deg,
+    approach_corridor_weight,
     conjunction_penalty,
     time_penalty_weight
 
@@ -27,5 +26,7 @@ from .sim_parameters import (
     MAX_DV,
     MAX_DRIFT_DURATION,
     rso_sat_args,
-    inspector_sat_args
+    inspector_sat_args,
+    approach_corridor_angle_deg,
+    docking_phase_range_threshold
 )

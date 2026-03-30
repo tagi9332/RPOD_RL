@@ -12,6 +12,7 @@ from bsk_rl import ConstellationTasking, scene, data
 from bsk_rl.sim import fsw
 from Basilisk.architecture import bskLogging
 from Basilisk.utilities import RigidBodyKinematics as rbk
+from Basilisk.utilities import vizSupport
 
 # Base training script imports
 from src.train import (
@@ -20,8 +21,10 @@ from src.train import (
     RSOSat,
     InspectorSat,
     Sb3BksEnv,
-    sat_arg_randomizer
 )
+
+# Import custom satellite argument randomizer
+from utils.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer as sat_arg_randomizer
 
 # Import custom rewarders
 from utils.rewarders import get_rewarders
@@ -40,7 +43,7 @@ from utils.plotting import (
 )
 # Import weights
 from resources import (
-    docking_corridor_angle_deg,
+    approach_corridor_angle_deg,
 )
 
 # Import sim parameters
@@ -108,6 +111,15 @@ class InferenceEnv(Sb3BksEnv):
         boresight_B = np.array([0.0, 0.0, 1.0]) 
         pointing_error_rad = np.arccos(np.clip(np.dot(u_Target_B, boresight_B), -1.0, 1.0))
 
+        if "metrics" in info:
+            info["metrics"]["sim_time"] = self.current_sim_time
+            # ... [your other metrics] ...
+            info["metrics"]["approach_angle_deg"] = approach_angle_deg
+            
+            # --- ADD THIS ---
+            # Save the raw MRP so the plotting script can read it
+            info["metrics"]["rso_sigma_BN"] = rso_sigma_BN
+
         # Hardware metrics
         insp_torque_cmd = inspector.dynamics.satellite.data_store.satellite.dynamics.satellite.fsw.rwMotorTorque.rwMotorTorqueOutMsg.payloadPointer.motorTorque[0:3]
         wheel_speeds = inspector.data_store.satellite.fsw.satellite.dynamics.wheel_speeds
@@ -133,14 +145,14 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer, scenario=scenario, rewarder=rewarders, time_limit=SIM_TIME, sim_rate=SIM_DT, log_level="INFO"
+        sat_arg_randomizer=sat_arg_randomizer(mode="test"), scenario=scenario, rewarder=rewarders, time_limit=SIM_TIME, sim_rate=SIM_DT, log_level="WARNING"
     )
 
     env_sb3 = InferenceEnv(env)
     env_sb3 = FlattenObservation(env_sb3)
 
     try:
-        model = PPO.load(model_path)
+        model = PPO.load(model_path, device="cpu")
     except FileNotFoundError:
         print(f"ERROR: Model not found at {model_path}")
         return None, None
@@ -152,6 +164,36 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         print(f"--- Executing Run {run_idx + 1}/{num_runs} ---")
         obs, _ = env_sb3.reset()
         if isinstance(obs, tuple): obs = obs[0]
+
+        # # ====================================================================
+        # # --- VIZARD INTEGRATION ---
+        # # 1. Grab the raw Basilisk simulator directly from the base env
+        # sim = env.simulator
+        
+        # # 2. Extract the C++ spacecraft objects so Vizard knows what to draw
+        # sc_objects = [sat.dynamics.scObject for sat in env.satellites]
+        
+        # # 3. Create a unique save path for this run's Vizard data
+        # viz_save_dir = os.path.abspath(os.path.join(output_folder, "vizard_data"))
+        # os.makedirs(viz_save_dir, exist_ok=True)
+        # viz_filepath = os.path.join(viz_save_dir, f"run_{run_idx + 1}_vizard.bin") 
+        
+        # # 4. Find a valid task name dynamically from the C++ core
+        # task_names = [task.TaskPtr.TaskName for proc in sim.TotalSim.processList for task in proc.processTasks]
+        # viz_task_name = next((name for name in task_names if 'dyn' in name.lower()), task_names[0])
+        
+        # # 5. Enable the recorder
+        # vizSupport.enableUnityVisualization(
+        #     sim, 
+        #     viz_task_name, 
+        #     sc_objects, 
+        #     saveFile=viz_filepath
+        # )
+
+        # # 6. CRITICAL FIX: Re-initialize the C++ simulation so the new Vizard 
+        # # module allocates its memory properly before the agent takes a step!
+        # sim.InitializeSimulation()
+        # # ====================================================================
             
         done = False
         run_data_log = [] 
@@ -199,7 +241,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         final_angle = run_df.iloc[-1].get("approach_angle_deg", 180.0)
         
         # Success is strictly a conjunction WITHIN the cone limit
-        success = conjunction and (final_angle <= docking_corridor_angle_deg)
+        success = conjunction and (final_angle <= approach_corridor_angle_deg)
         
         if success: 
             end_status = f"Docked ({final_angle:.1f}°)"
@@ -232,7 +274,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\100p_success_30deg.zip"
+    model_path = r"models/training_run_2026-03-30_08-25-21/rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
