@@ -3,7 +3,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 class TimeRemainingCallback(BaseCallback):
     """
-    Calculates and prints the estimated time remaining every N steps.
+    Calculates and prints the estimated time remaining based on TOTAL timesteps.
     """
     def __init__(self, total_steps, verbose=0):
         super(TimeRemainingCallback, self).__init__(verbose)
@@ -14,21 +14,27 @@ class TimeRemainingCallback(BaseCallback):
         self.start_time = time.time()
 
     def _on_step(self) -> bool:
-        # Update every 10,000 steps
-        if self.n_calls % 50000 == 0 and self.n_calls > 0:
-            current_time = time.time()
-            elapsed_time = current_time - self.start_time # type: ignore
-            fps = self.n_calls / elapsed_time
-            
-            remaining_steps = self.total_steps - self.n_calls
-            remaining_time_sec = remaining_steps / fps
-            
-            # Convert to minutes and seconds
-            mins, secs = divmod(int(remaining_time_sec), 60)
-            hours, mins = divmod(mins, 60)
-            
-            print(f"\n>>> Progress: {self.n_calls}/{self.total_steps} steps")
-            print(f">>> Current Speed: {fps:.2f} FPS")
-            print(f">>> Estimated Time Remaining: {hours:02d}h:{mins:02d}m:{secs:02d}s")
-            
+        # Check progress every 100000 AGGREGATE steps
+        # We use num_timesteps because it accounts for all parallel environments
+        if self.num_timesteps % 100000 < self.training_env.num_envs:
+            if self.num_timesteps > 0:
+                current_time = time.time()
+                elapsed_time = current_time - self.start_time
+                
+                # THE FIX: Use num_timesteps for real FPS
+                fps = self.num_timesteps / elapsed_time
+                
+                remaining_steps = self.total_steps - self.num_timesteps
+                remaining_time_sec = remaining_steps / fps if fps > 0 else 0
+                
+                # Convert to h:m:s
+                mins, secs = divmod(int(remaining_time_sec), 60)
+                hours, mins = divmod(mins, 60)
+                print(f"\n----------------------------------------------------------")
+                print(f"\nProgress: {self.num_timesteps}/{self.total_steps} steps")
+                print(f"Total Speed: {fps:.2f} FPS (Aggregate across {self.training_env.num_envs} cores)")
+                print(f"Estimated Time Remaining: {hours:02d}h:{mins:02d}m:{secs:02d}s")
+                print(f"Time of Completion (ETA): {time.ctime(current_time + remaining_time_sec)}\n")
+                print(f"----------------------------------------------------------\n")
+                
         return True

@@ -1,3 +1,5 @@
+import numpy as np
+
 # Simulation Time Limit
 SIM_TIME = 10800
 
@@ -5,11 +7,11 @@ SIM_TIME = 10800
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 0.2  # m/s
-MAX_DRIFT_DURATION = 2000 # s
+MAX_DV = 0.5  # m/s
+MAX_DRIFT_DURATION = 30 # s
 
 # Relative State Initialization Bounds
-MAX_REL_POS = 505.0  # meters
+MAX_REL_POS = 505  # meters
 MIN_REL_POS = 500     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
@@ -20,6 +22,14 @@ approach_corridor_angle_deg=90
 
 # Phase Transition Parameters
 docking_phase_range_threshold=500
+
+# Satellite Boresights
+inspector_boresight = np.array([0.0, 0.0, 1.0])
+docking_port_boresight = np.array([0.0, 0.0, 1.0])
+
+# Illumination Reward Parameters
+sun_illumination_cone_angle_deg = 60
+illumination_cutoff_range = 1000
 
 # --- CONFIGURATION DICTIONARIES ---
 rso_sat_args = dict(
@@ -35,7 +45,7 @@ rso_sat_args = dict(
 )
 
 inspector_sat_args = dict(
-    imageAttErrorRequirement=1.0,
+    imageAttErrorRequirement=3.0,
     imageRateErrorRequirement=None,
     instrumentBaudRate=1,
     dataStorageCapacity=1e6,

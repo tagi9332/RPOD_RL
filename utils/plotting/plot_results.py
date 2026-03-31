@@ -82,6 +82,10 @@ def plot_trajectory_analysis(df, output_folder="results"):
     print(f"Saved Trajectory Analysis to {save_path}")
     plt.close(fig)
 
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_control_analysis(df, output_folder="results"):
     """
     Generates plots related to ADCS performance: Pointing Error, Attitude, Torques, and Wheel Speeds.
@@ -92,34 +96,71 @@ def plot_control_analysis(df, output_folder="results"):
     fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
     fig.suptitle(f"Attitude & Control Analysis", fontsize=16)
 
-    # Unpack axes
     ax0, ax1, ax2, ax3 = axes
 
-    # --- Plot 1: Pointing Error ---
-    if 'pointing_error_deg' in df.columns:
-        # Plot directly
-        ax0.plot(df['time_min'], df['pointing_error_deg'], color='k', linewidth=2, label='Error')
-        
-        # Add visual guides
-        ax0.axhline(5.0, color='r', linestyle='--', label='Req (5 deg)')
-        ax0.fill_between(df['time_min'], 0, 5.0, color='green', alpha=0.1)
-        
-        ax0.set_ylabel("Error [deg]")
+    # --- Plot 1: Pointing Error & Components ---
+    # Auto-convert radians to degrees if needed
+    if 'pointing_error' in df.columns and 'pointing_error_deg' not in df.columns:
+        df['pointing_error_deg'] = np.degrees(df['pointing_error'])
 
-    # --- Plot 2: Attitude State (The "State") ---
-    ax1.plot(df['time_min'], df['sigma_1'], label='$\sigma_1$', color='red')
-    ax1.plot(df['time_min'], df['sigma_2'], label='$\sigma_2$', color='green')
-    ax1.plot(df['time_min'], df['sigma_3'], label='$\sigma_3$', color='blue')
-    ax1.set_ylabel("Inertial MRP ($\sigma$)")
+    lines_ax0, labels_ax0 = [], []
+    
+    if 'pointing_error_deg' in df.columns:
+        l1, = ax0.plot(df['time_min'], df['pointing_error_deg'], color='k', linewidth=2, label='Total Error [deg]')
+        ax0.set_ylabel("Total Error [deg]", color='k')
+        ax0.tick_params(axis='y', labelcolor='k')
+        lines_ax0.append(l1)
+        labels_ax0.append('Total Error [deg]')
+
+    # Check for tracking error MRP components (sigma_BR)
+    err_x = next((c for c in df.columns if c in ['sigma_BR_x', 'att_err_x']), None)
+    err_y = next((c for c in df.columns if c in ['sigma_BR_y', 'att_err_y']), None)
+    err_z = next((c for c in df.columns if c in ['sigma_BR_z', 'att_err_z']), None)
+
+    if err_x and err_y and err_z:
+        ax0_twin = ax0.twinx()
+        l2, = ax0_twin.plot(df['time_min'], df[err_x], label='$\sigma_{BR,1}$', color='red', alpha=0.8)
+        l3, = ax0_twin.plot(df['time_min'], df[err_y], label='$\sigma_{BR,2}$', color='green', alpha=0.8)
+        l4, = ax0_twin.plot(df['time_min'], df[err_z], label='$\sigma_{BR,3}$', color='blue', alpha=0.8)
+        ax0_twin.set_ylabel("Error MRP ($\sigma_{BR}$)")
+        
+        lines_ax0.extend([l2, l3, l4])
+        labels_ax0.extend(['$\sigma_{BR,1}$', '$\sigma_{BR,2}$', '$\sigma_{BR,3}$'])
+
+    if lines_ax0:
+        ax0.legend(lines_ax0, labels_ax0, loc='upper right')
+    else:
+        ax0.text(0.5, 0.5, "Error Data Not Found", ha='center', transform=ax0.transAxes)
+
+    ax0.set_title("Attitude Tracking Error")
+    ax0.grid(True, alpha=0.5)
+
+    # --- Plot 2: Attitude State ---
+    sig_x = 'sigma_BN_x' if 'sigma_BN_x' in df.columns else 'sigma_1'
+    sig_y = 'sigma_BN_y' if 'sigma_BN_y' in df.columns else 'sigma_2'
+    sig_z = 'sigma_BN_z' if 'sigma_BN_z' in df.columns else 'sigma_3'
+    
+    if sig_x in df.columns:
+        ax1.plot(df['time_min'], df[sig_x], label='$\sigma_1$', color='red')
+        ax1.plot(df['time_min'], df[sig_y], label='$\sigma_2$', color='green')
+        ax1.plot(df['time_min'], df[sig_z], label='$\sigma_3$', color='blue')
+    else:
+        ax1.text(0.5, 0.5, "Attitude Data Not Found", ha='center', transform=ax1.transAxes)
+        
+    ax1.set_ylabel("Inertial MRP ($\sigma_{BN}$)")
     ax1.set_title("Inertial Attitude State")
     ax1.grid(True, alpha=0.5)
     ax1.legend(loc='upper right')
 
-    # --- Plot 3: Control Torques (The "Effort") ---
-    if 'torque_x' in df.columns:
-        ax2.plot(df['time_min'], df['torque_x'], label='$u_x$', color='red', alpha=0.8)
-        ax2.plot(df['time_min'], df['torque_y'], label='$u_y$', color='green', alpha=0.8)
-        ax2.plot(df['time_min'], df['torque_z'], label='$u_z$', color='blue', alpha=0.8)
+    # --- Plot 3: Control Torques ---
+    tq_x = 'torque_cmd_x' if 'torque_cmd_x' in df.columns else 'torque_x'
+    tq_y = 'torque_cmd_y' if 'torque_cmd_y' in df.columns else 'torque_y'
+    tq_z = 'torque_cmd_z' if 'torque_cmd_z' in df.columns else 'torque_z'
+    
+    if tq_x in df.columns:
+        ax2.plot(df['time_min'], df[tq_x], label='$u_x$', color='red', alpha=0.8)
+        ax2.plot(df['time_min'], df[tq_y], label='$u_y$', color='green', alpha=0.8)
+        ax2.plot(df['time_min'], df[tq_z], label='$u_z$', color='blue', alpha=0.8)
     else:
         ax2.text(0.5, 0.5, "Torque Data Not Found", ha='center', transform=ax2.transAxes)
         
@@ -128,11 +169,16 @@ def plot_control_analysis(df, output_folder="results"):
     ax2.grid(True, alpha=0.5)
     ax2.legend(loc='upper right')
 
-    # --- Plot 4: Wheel Speeds (The "Limit") ---
-    ws_cols = [c for c in df.columns if c.startswith('ws_')]
+    # --- Plot 4: Wheel Speeds ---
+    ws_cols = [c for c in df.columns if c.startswith('ws_') or c.startswith('wheel_speeds_')]
+    
     if ws_cols:
         for i, col in enumerate(ws_cols):
             ax3.plot(df['time_min'], df[col], label=f'RW {i+1}')
+    elif 'wheel_speeds' in df.columns:
+        ws_array = np.vstack(df['wheel_speeds'].values)
+        for i in range(ws_array.shape[1]):
+            ax3.plot(df['time_min'], ws_array[:, i], label=f'RW {i+1}')
     else:
         ax3.text(0.5, 0.5, "Wheel Speed Data Not Found", ha='center', transform=ax3.transAxes)
 
@@ -140,8 +186,7 @@ def plot_control_analysis(df, output_folder="results"):
     ax3.set_xlabel("Time [min]")
     ax3.set_title("Reaction Wheel Speeds")
     ax3.grid(True, alpha=0.5)
-    if len(ws_cols) < 5: 
-        ax3.legend(loc='upper right')
+    ax3.legend(loc='upper right')
 
     plt.tight_layout()
     save_path = os.path.join(output_folder, "control_analysis.png")

@@ -6,8 +6,15 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from utils.frame_conversions.MRP_conversions import MRP2C
 
 
-
-def animate_results(df, output_folder="results"):
+def animate_results(df, output_folder="results", boresight_vector=[0, -1, 0]):
+    """
+    Animates the RSO and Inspector trajectory.
+    
+    Args:
+        df: DataFrame containing the trajectory and attitude data.
+        output_folder: Directory to save the resulting GIF.
+        boresight_vector: 3D list or array defining the camera pointing axis in the body frame.
+    """
     if df is None or df.empty: return
     print("Generating Animation...")
 
@@ -45,20 +52,31 @@ def animate_results(df, output_folder="results"):
     inspector_box = Poly3DCollection(faces_box, facecolors='green', edgecolors='black', alpha=0.8)
     ax.add_collection3d(inspector_box)
 
-    # 3. Boresight Cone (NEW)
-    # Define cone parameters in body frame (pointing along +x axis)
-    cone_len = scale_factor * 5.0 # Make it significantly longer than the box
+    # 3. Boresight Cone (UPDATED)
+    cone_len = scale_factor * 5.0
     cone_angle_deg = 15
     cone_radius = cone_len * np.tan(np.radians(cone_angle_deg))
     
-    # Generate base circle points in y-z plane
-    theta = np.linspace(0, 2*np.pi, 20)
-    y_base = cone_radius * np.cos(theta)
-    z_base = cone_radius * np.sin(theta)
-    x_base = np.full_like(y_base, cone_len)
+    # Normalize the provided boresight vector
+    b_vec = np.array(boresight_vector, dtype=float)
+    b_vec = b_vec / np.linalg.norm(b_vec)
     
-    # Vertices: Apex at origin + base circle points
-    v_cone_base = np.vstack((x_base, y_base, z_base)).T
+    # Find two orthogonal vectors to form the base circle of the cone
+    # We pick an arbitrary vector 'v' that is not parallel to 'b_vec'
+    v = np.array([1.0, 0.0, 0.0])
+    if np.abs(np.dot(b_vec, v)) > 0.99:
+        v = np.array([0.0, 1.0, 0.0])
+        
+    u1 = np.cross(b_vec, v)
+    u1 = u1 / np.linalg.norm(u1)
+    u2 = np.cross(b_vec, u1)
+    
+    # Generate base circle points in the plane perpendicular to b_vec
+    theta = np.linspace(0, 2*np.pi, 20)
+    base_center = cone_len * b_vec
+    
+    # Create the circle vertices using the orthogonal basis vectors
+    v_cone_base = base_center + cone_radius * (np.outer(np.cos(theta), u1) + np.outer(np.sin(theta), u2))
     v_cone_apex = np.array([[0.0, 0.0, 0.0]])
     v_cone = np.vstack((v_cone_apex, v_cone_base))
 

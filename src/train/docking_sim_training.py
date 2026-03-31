@@ -28,13 +28,13 @@ from utils.observations import (
 )
 
 # Import custom FSW model for continuous pointing
-from src.attitude_modules.pointing_fsw import AlwaysPointFSWModel
+from src.fsw_modules.pointing_fsw import RSOInspectorFSWModel
 
 # Import custom rewarder function
-from utils.rewarders import get_rewarders
+from src.rewarders import get_rewarders
 
 # Import custom satellite argument randomizer
-from utils.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer as sat_arg_randomizer
+from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer as sat_arg_randomizer
 
 # Import weights
 from resources import (
@@ -127,7 +127,7 @@ class InspectorSat(sats.Satellite):
     ]
     dyn_type = types.new_class("Dyn", (dyn.MaxRangeDynModel, dyn.ConjunctionDynModel, dyn.RSOInspectorDynModel))
     # fsw_type = types.new_class("FSW", (fsw.SteeringFSWModel, fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))
-    fsw_type = types.new_class("FSW", (fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))
+    fsw_type = types.new_class("FSW", (fsw.MagicOrbitalManeuverFSWModel, RSOInspectorFSWModel))
 
 
 class Sb3BksEnv(gym.Env):
@@ -137,8 +137,23 @@ class Sb3BksEnv(gym.Env):
         self.observation_space = env.observation_space(agent_name)
         self.action_space = env.action_space(agent_name)
 
+        # Track scheduled parameters
+        self.scheduled_conjunction_radius = inspector_sat_args.get("conjunction_radius", 30)
+
+    def set_scheduled_parameters(self, conjunction_radius=None):
+        if conjunction_radius is not None:
+            self.scheduled_conjunction_radius = conjunction_radius
+            for sat in self.env.satellites:
+                if sat.name == "Inspector":
+                    sat.sat_args["conjunction_radius"] = conjunction_radius
+                    sat.logger.info(f"Updated conjunction radius to {conjunction_radius} at sim time {self.env.simulator.sim_time:.2f}s")
+
     def reset(self, **kwargs):
         obs_dict, info = self.env.reset(**kwargs)
+
+        # Ensure the scheduled parameters are set at the start of each episode
+        self.set_scheduled_parameters(conjunction_radius=self.scheduled_conjunction_radius)
+
         return obs_dict[self.agent_name], info
 
     def step(self, action):

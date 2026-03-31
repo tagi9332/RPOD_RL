@@ -5,7 +5,7 @@ dv_reward_weight=0.001
 rel_range_log_weight=-0.0001
 
 # Docking Reward
-docking_reward=4
+docking_reward=10
 
 # Max Range Penalty
 max_range_penalty=-3
@@ -18,3 +18,6 @@ time_penalty_weight=-0.005
 
 # Conjunction Penalty
 conjunction_penalty=-2
+
+# Illumination Reward
+illumination_weight=0.0001

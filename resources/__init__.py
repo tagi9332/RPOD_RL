@@ -6,7 +6,8 @@ from .weights import (
     max_range_penalty,
     approach_corridor_weight,
     conjunction_penalty,
-    time_penalty_weight
+    time_penalty_weight,
+    illumination_weight
 
 )
 from .hyperparameters import (
@@ -28,5 +29,9 @@ from .sim_parameters import (
     rso_sat_args,
     inspector_sat_args,
     approach_corridor_angle_deg,
-    docking_phase_range_threshold
+    docking_phase_range_threshold,
+    inspector_boresight,
+    docking_port_boresight,
+    sun_illumination_cone_angle_deg,
+    illumination_cutoff_range,
 )

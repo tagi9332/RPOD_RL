@@ -1,5 +1,5 @@
 # Learning rate
-learning_rate = 3e-5
+learning_rate = 3e-4
 
 # Entropy coefficient
 entropy_coeff = 0.001

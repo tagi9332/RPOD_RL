@@ -5,9 +5,10 @@ from bsk_rl import data
 from bsk_rl.sim import fsw
 
 # Import custom classes
-from utils.rewarders.docking_corridor_rewarder import DockingCorridorReward
-from utils.rewarders.quadratic_time_penalty import QuadraticTimePenalty
-from utils.rewarders.rel_range_rewarder import RelativeRangeLogReward
+from src.rewarders.docking_corridor_rewarder import DockingCorridorReward
+from src.rewarders.quadratic_time_penalty import QuadraticTimePenalty
+from src.rewarders.rel_range_rewarder import RelativeRangeLogReward
+from src.rewarders.target_illumination_rewarder import IlluminationReward
 
 # Import weights and constants
 from resources import (
@@ -15,7 +16,12 @@ from resources import (
     rel_range_log_weight,
     approach_corridor_weight,
     time_penalty_weight,
-    SIM_TIME
+    SIM_TIME,
+    docking_port_boresight,
+    illumination_weight,
+    sun_illumination_cone_angle_deg,
+    illumination_cutoff_range,
+
 )
 
 def get_rewarders():
@@ -31,7 +37,7 @@ def get_rewarders():
         ),
         DockingCorridorReward(
             weight=approach_corridor_weight, 
-            docking_port_boresight=np.array([0.0, 0.0, 1.0]), 
+            docking_port_boresight=docking_port_boresight, 
             cutoff_range=1000
         ),
         QuadraticTimePenalty(
@@ -39,4 +45,10 @@ def get_rewarders():
             max_sim_time=SIM_TIME, 
             power=2.0
         ),
+        IlluminationReward(
+            weight=illumination_weight,
+            cutoff_range=illumination_cutoff_range,
+            cone_angle_deg=sun_illumination_cone_angle_deg
+        )
+
     )

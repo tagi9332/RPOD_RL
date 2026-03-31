@@ -23,6 +23,9 @@ from Basilisk.architecture import bskLogging
 from bsk_rl import scene, data, ConstellationTasking
 from bsk_rl.sim import fsw
 
+# Import custom callbacks
+from src.conjunction_radius_scheduler import ConjunctionRadiusScheduler
+
 # Base training script imports
 from src.train import (
     rso_sat_args,
@@ -33,10 +36,10 @@ from src.train import (
 ) 
 
 # Import randomizer
-from utils.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer
+from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer
 
 # Import rewarders
-from utils.rewarders import get_rewarders
+from src.rewarders import get_rewarders
 
 # Import weight scheduler
 from src.weight_scheduler import CurriculumPenalty
@@ -54,7 +57,7 @@ from resources import (
     SIM_DT,
 )
 
-def make_env(rank: int, seed: int = 0):
+def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 512, total_timesteps: int = 1_000_000):
     """
     Utility function for multiprocessed env.
     Instantiates fresh Basilisk objects for each CPU core.
@@ -69,6 +72,7 @@ def make_env(rank: int, seed: int = 0):
             n_points=100, radius=1.0, theta_max=np.radians(30), 
             range_max=250, theta_solar_max=np.radians(60)
         )
+
         max_episodes=total_timesteps // num_cpu // n_steps_per_env
 
         rewarders = get_rewarders()
@@ -105,7 +109,8 @@ if __name__ == "__main__":
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(model_path, exist_ok=True)
     
-    new_logger = configure(log_dir, ["stdout", "csv"])
+    custom_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])
+    conj_radius_scheduler = ConjunctionRadiusScheduler(initial_radius=400, final_radius=30.0)
     
     # Config
     num_cpu = 14
@@ -113,15 +118,15 @@ if __name__ == "__main__":
     total_timesteps = 1_000_000 
     
     # Create multi-core training env
-    env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
-    
+    env = SubprocVecEnv([make_env(i, seed=0, total_timesteps=total_timesteps, num_cpu=num_cpu, n_steps_per_env=n_steps_per_env) for i in range(num_cpu)])    
+
     # Creat evaluation env
-    eval_env = DummyVecEnv([make_env(rank=99, seed=42)])
-    
+    eval_env = DummyVecEnv([make_env(rank=99, seed=42, total_timesteps=total_timesteps, num_cpu=1, n_steps_per_env=n_steps_per_env)])    
+
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\rpo_min_dv_spec.zip"
+    LOAD_PATH = "models/training_run_2026-03-30_13-55-27/rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -147,7 +152,7 @@ if __name__ == "__main__":
             max_grad_norm=max_grad_norm,
         )
         
-    model.set_logger(new_logger)
+    model.set_logger(custom_logger)
     
     # Callbacks
     time_callback = TimeRemainingCallback(total_steps=int(total_timesteps))
@@ -166,7 +171,7 @@ if __name__ == "__main__":
     checkpointcallback = CheckpointCallback(save_freq=eval_freq, save_path=model_path, name_prefix="ppo_inspector_multicore_checkpoint")
 
     # Combine them into a list
-    callbacks = CallbackList([eval_callback, time_callback, checkpointcallback])
+    callbacks = CallbackList([eval_callback, time_callback, checkpointcallback, conj_radius_scheduler])
 
     print(f"Starting training on {num_cpu} cores...")
     

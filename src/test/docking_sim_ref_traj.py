@@ -24,10 +24,10 @@ from src.train import (
 )
 
 # Import custom satellite argument randomizer
-from utils.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer as sat_arg_randomizer
+from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_randomizer as sat_arg_randomizer
 
 # Import custom rewarders
-from utils.rewarders import get_rewarders
+from src.rewarders import get_rewarders
 
 # Local plotting scripts
 from utils.plotting import (
@@ -44,6 +44,8 @@ from utils.plotting import (
 # Import weights
 from resources import (
     approach_corridor_angle_deg,
+    inspector_boresight,
+    docking_port_boresight
 )
 
 # Import sim parameters
@@ -81,57 +83,58 @@ class InferenceEnv(Sb3BksEnv):
         
         rso_r_N = np.array(rso.dynamics.r_BN_N)
         insp_r_N = np.array(inspector.dynamics.r_BN_N)
-        sigma_BN = np.array(inspector.dynamics.sigma_BN)
-        dcm_BN = rbk.MRP2C(sigma_BN)
+        dist = np.linalg.norm(insp_r_N - rso_r_N)
 
-        # Compute approach angle for docking corridor reward
+        # ----------------------------------------------------------------------------
+        # METRIC 1: Approach Angle (Inspector's position relative to RSO's docking port)
+        # ----------------------------------------------------------------------------
         rso_sigma_BN = np.array(rso.dynamics.sigma_BN)
-        dcm_BN = rbk.MRP2C(rso_sigma_BN)
-        r_rel_N = insp_r_N - rso_r_N
-        dist = np.linalg.norm(r_rel_N)
+        dcm_BN_rso = rbk.MRP2C(rso_sigma_BN)
+        
+        # Vector FROM RSO TO Inspector
+        r_rel_rso_to_insp_N = insp_r_N - rso_r_N
 
         if dist > 1e-6:
-            r_rel_B_hat = np.dot(dcm_BN, r_rel_N / dist)
-            boresight_B = np.array([0.0, 0.0, 1.0]) # Assuming Z-axis docking port
-            approach_angle_rad = np.arccos(np.clip(np.dot(r_rel_B_hat, boresight_B), -1.0, 1.0))
+            r_rel_B_hat = np.dot(dcm_BN_rso, r_rel_rso_to_insp_N / dist)
+            approach_angle_rad = np.arccos(np.clip(np.dot(r_rel_B_hat, docking_port_boresight), -1.0, 1.0))
             approach_angle_deg = np.degrees(approach_angle_rad)
         else:
             approach_angle_deg = 0.0
+
         # ----------------------------------------------------------------------------
+        # METRIC 2: Pointing Error (Inspector's camera aiming at the RSO)
+        # ----------------------------------------------------------------------------
+        sigma_BN_insp = np.array(inspector.dynamics.sigma_BN)
+        dcm_BN_insp = rbk.MRP2C(sigma_BN_insp) 
 
-        # (Your existing pointing error / hardware metric code stays here)
-        sigma_BN = np.array(inspector.dynamics.sigma_BN)
-        dcm_BN_insp = rbk.MRP2C(sigma_BN)
+        # Vector FROM Inspector TO RSO (Notice the subtraction order is flipped!)
+        r_rel_insp_to_rso_N = rso_r_N - insp_r_N 
+        
+        if dist > 1e-6:
+            u_Target_N = r_rel_insp_to_rso_N / dist 
+            u_Target_B = np.dot(dcm_BN_insp, u_Target_N) 
+            pointing_error_rad = np.arccos(np.clip(np.dot(u_Target_B, inspector_boresight), -1.0, 1.0))
+        else:
+            pointing_error_rad = 0.0
 
-        # Compute pointing error
-        r_Rel_N = rso_r_N - insp_r_N
-        dist = np.linalg.norm(r_Rel_N)
-        u_Target_N = r_Rel_N / dist if dist > 1e-6 else np.array([1., 0., 0.])
-        u_Target_B = np.dot(dcm_BN, u_Target_N)
-        boresight_B = np.array([0.0, 0.0, 1.0]) 
-        pointing_error_rad = np.arccos(np.clip(np.dot(u_Target_B, boresight_B), -1.0, 1.0))
-
+        # ----------------------------------------------------------------------------
+        # Save to Info Dictionary
+        # ----------------------------------------------------------------------------
         if "metrics" in info:
             info["metrics"]["sim_time"] = self.current_sim_time
-            # ... [your other metrics] ...
-            info["metrics"]["approach_angle_deg"] = approach_angle_deg
             
-            # --- ADD THIS ---
-            # Save the raw MRP so the plotting script can read it
-            info["metrics"]["rso_sigma_BN"] = rso_sigma_BN
-
-        # Hardware metrics
-        insp_torque_cmd = inspector.dynamics.satellite.data_store.satellite.dynamics.satellite.fsw.rwMotorTorque.rwMotorTorqueOutMsg.payloadPointer.motorTorque[0:3]
-        wheel_speeds = inspector.data_store.satellite.fsw.satellite.dynamics.wheel_speeds
-
-        # Append to existing metrics dictionary
-        if "metrics" in info:
-            info["metrics"]["sim_time"] = self.current_sim_time
+            # Attitude Metrics
+            info["metrics"]["approach_angle_deg"] = approach_angle_deg
             info["metrics"]["pointing_error"] = pointing_error_rad
+            info["metrics"]["rso_sigma_BN"] = rso_sigma_BN
+            
+            # Hardware Metrics
+            insp_torque_cmd = inspector.dynamics.satellite.data_store.satellite.dynamics.satellite.fsw.rwMotorTorque.rwMotorTorqueOutMsg.payloadPointer.motorTorque[0:3]
+            wheel_speeds = inspector.data_store.satellite.fsw.satellite.dynamics.wheel_speeds
             info["metrics"]["torque_cmd"] = insp_torque_cmd
             info["metrics"]["wheel_speeds"] = wheel_speeds
-            info["metrics"]["approach_angle_deg"] = approach_angle_deg
-            # Extract Fuel Remaining
+            
+            # Consumables
             info["metrics"]["dV_remaining"] = inspector.fsw.dv_available if hasattr(inspector.fsw, 'dv_available') else 0.0
         
         return obs, reward, terminated, truncated, info
@@ -165,35 +168,52 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         obs, _ = env_sb3.reset()
         if isinstance(obs, tuple): obs = obs[0]
 
-        # # ====================================================================
-        # # --- VIZARD INTEGRATION ---
-        # # 1. Grab the raw Basilisk simulator directly from the base env
-        # sim = env.simulator
-        
-        # # 2. Extract the C++ spacecraft objects so Vizard knows what to draw
-        # sc_objects = [sat.dynamics.scObject for sat in env.satellites]
-        
-        # # 3. Create a unique save path for this run's Vizard data
-        # viz_save_dir = os.path.abspath(os.path.join(output_folder, "vizard_data"))
-        # os.makedirs(viz_save_dir, exist_ok=True)
-        # viz_filepath = os.path.join(viz_save_dir, f"run_{run_idx + 1}_vizard.bin") 
-        
-        # # 4. Find a valid task name dynamically from the C++ core
-        # task_names = [task.TaskPtr.TaskName for proc in sim.TotalSim.processList for task in proc.processTasks]
-        # viz_task_name = next((name for name in task_names if 'dyn' in name.lower()), task_names[0])
-        
-        # # 5. Enable the recorder
-        # vizSupport.enableUnityVisualization(
-        #     sim, 
-        #     viz_task_name, 
-        #     sc_objects, 
-        #     saveFile=viz_filepath
-        # )
+        # ====================================================================
+        # --- VIZARD INTEGRATION ---
+        # 1. Grab the raw Basilisk simulator directly from the base env
+        sim = env.simulator
 
-        # # 6. CRITICAL FIX: Re-initialize the C++ simulation so the new Vizard 
-        # # module allocates its memory properly before the agent takes a step!
-        # sim.InitializeSimulation()
-        # # ====================================================================
+        # 2. Extract the C++ spacecraft objects so Vizard knows what to draw
+        rso_sc = env.satellites[0].dynamics.scObject
+        insp_sc = env.satellites[1].dynamics.scObject
+        sc_objects = [rso_sc, insp_sc]
+
+        # 3. Create a unique save path for this run's Vizard data
+        viz_save_dir = os.path.abspath(os.path.join(output_folder, "vizard_data"))
+        os.makedirs(viz_save_dir, exist_ok=True)
+        viz_filepath = os.path.join(viz_save_dir, f"run_{run_idx + 1}_vizard.bin") 
+
+        # 4. Find a valid task name dynamically from the C++ core
+        task_names = [task.TaskPtr.TaskName for proc in sim.TotalSim.processList for task in proc.processTasks]
+        viz_task_name = next((name for name in task_names if 'dyn' in name.lower()), task_names[0])
+
+        # 5. Enable the recorder and capture the viz module object
+        viz = vizSupport.enableUnityVisualization(
+            sim, 
+            viz_task_name, 
+            sc_objects, 
+            saveFile=viz_filepath
+        )
+
+        # --- BONUS: Visual Helpers ---
+        # Draw a cyan line between the Inspector and the RSO to visualize pointing
+        vizSupport.createPointLine(viz, 
+            fromBodyName=insp_sc.ModelTag, 
+            toBodyName=rso_sc.ModelTag, 
+            lineColor=vizSupport.toRGBA255("cyan")
+        )
+        
+        # Turn on labels and local body frames (X, Y, Z axes) so you can see 
+        # exactly how the Inspector's docking port aligns with the RSO
+        viz.settings.showSpacecraftLabels = 1
+        viz.settings.showSpacecraftLocalFrames = 1 
+
+        # 6. CRITICAL FIX: Do NOT call sim.InitializeSimulation() here!
+        # env.reset() already set up your randomized initial states. 
+        # Instead, just initialize the specific Vizard module we just added to the task
+        # so it allocates memory without wiping your RL environment states.
+        viz.Reset(0)
+        # ====================================================================
             
         done = False
         run_data_log = [] 
@@ -274,10 +294,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models/training_run_2026-03-30_08-25-21/rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-03-30_17-23-13\ppo_inspector_multicore_checkpoint_999880_steps.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=10)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)
@@ -307,10 +327,10 @@ if __name__ == "__main__":
 
     plot_control_analysis(processed_data_best, os.path.join(output_folder, "best_run"))
     plot_trajectory_analysis(processed_data_best, os.path.join(output_folder, "best_run"))
-    # animate_results(processed_data_best, os.path.join(output_folder, "best_run"))
+    animate_results(processed_data_best, os.path.join(output_folder, "best_run"))
 
     plot_control_analysis(processed_data_worst, os.path.join(output_folder, "worst_run"))
     plot_trajectory_analysis(processed_data_worst, os.path.join(output_folder, "worst_run"))
-    # animate_results(processed_data_worst, os.path.join(output_folder, "worst_run"))
+    animate_results(processed_data_worst, os.path.join(output_folder, "worst_run"))
 
     print("\nAll inferences and plots complete!")
