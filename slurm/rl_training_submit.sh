@@ -12,49 +12,28 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=tagi9332@colorado.edu
 
-# Clear out any loaded modules
+# 1. Environment Setup
 module purge
-
-# Load Git
 module load git
-
-# Load the EXACT version of UV the cluster told you it has
 module load uv/0.8.15
 
-# Load the standard Python (Alpine usually uses 'python' or 'anaconda')
-module load python/3.10.2
+# 2. Navigate to the Project Root
+# Since you submit from 'RPOD_RL/slurm', we move up one level to 'RPOD_RL'
+cd ..
 
-# --- Git Repository Setup ---
-REPO_URL="https://github.com/tagi9332/RPOD_RL.git"
-REPO_DIR="RPOD_RL"
-
-if [ ! -d "$REPO_DIR" ]; then
-    echo "Cloning repository for the first time..."
-    git clone $REPO_URL
-else
-    echo "Repository already exists. Pulling the latest changes..."
-    cd $REPO_DIR
-    git pull
-    cd ..
-fi
-
-cd $REPO_DIR
-
-# --- uv Environment Setup ---
-# Create a virtual environment (.venv) if one doesn't already exist
+# 3. Create/Activate Python 3.12 Environment
+# This solves your 'contourpy' and 'Python version' errors
 if [ ! -d ".venv" ]; then
-    echo "Creating new uv virtual environment..."
-    uv venv
+    echo "Creating virtual environment with Python 3.12..."
+    uv venv --python 3.12
 fi
-
-# Activate the virtual environment
 source .venv/bin/activate
 
-# Install or update dependencies (adjust this if you use pyproject.toml instead)
-echo "Syncing dependencies..."
+# 4. Install Dependencies
+echo "Installing requirements..."
 uv pip install -r requirements.txt
-# Note: If you use a pyproject.toml, you can replace the above line with `uv sync`
 
-# --- Execute Training ---
+# 5. Execute Training
 echo "Starting training..."
+# Path is relative to project root
 python src/train/docking_sim_multi_process.py
