@@ -26,7 +26,7 @@ rm -rf .venv
 
 # 4. Set up the Scratch Environment
 # Using alpine1 explicitly to match your curc-quota 10TB allocation
-mkdir -p "/scratch/alpine1/$USER"
+mkdir -p "/scratch/alpine/$USER"
 export VENV_DIR="/scratch/alpine/$USER/rpod_env"
 
 if [ ! -d "$VENV_DIR" ]; then

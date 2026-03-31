@@ -12,13 +12,13 @@ MAX_DRIFT_DURATION = 300 # s
 
 # Relative State Initialization Bounds
 MAX_REL_POS = 1000  # meters
-MIN_REL_POS = 500     # meters
+MIN_REL_POS = 800     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)
-approach_corridor_angle_deg=180
+approach_corridor_angle_deg=90
 
 # Phase Transition Parameters
 docking_phase_range_threshold=500
