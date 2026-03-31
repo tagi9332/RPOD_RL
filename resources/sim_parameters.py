@@ -7,8 +7,8 @@ SIM_TIME = 10800
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 0.5  # m/s
-MAX_DRIFT_DURATION = 30 # s
+MAX_DV = 1  # m/s
+MAX_DRIFT_DURATION = 300 # s
 
 # Relative State Initialization Bounds
 MAX_REL_POS = 1000  # meters
@@ -51,7 +51,7 @@ inspector_sat_args = dict(
     dataStorageCapacity=1e6,
     batteryStorageCapacity=1e12,
     storedCharge_Init=1e12,
-    conjunction_radius=480,
+    conjunction_radius=100,
     dv_available_init=150,
     max_range_radius=5000,
     chief_name="RSO",
