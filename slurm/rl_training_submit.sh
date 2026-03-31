@@ -12,12 +12,17 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=tagi9332@colorado.edu
 
-# Clear out any loaded modules to prevent conflicts
+# Clear out any loaded modules
 module purge
 
-# Load Git (and potentially a base Python if your cluster requires it to see 'uv')
+# Load Git
 module load git
-module load python/3.11  # Uncomment if Alpine requires a base Python module for uv
+
+# Load the EXACT version of UV the cluster told you it has
+module load uv/0.8.15
+
+# Load the standard Python (Alpine usually uses 'python' or 'anaconda')
+module load python
 
 # --- Git Repository Setup ---
 REPO_URL="https://github.com/tagi9332/RPOD_RL.git"
