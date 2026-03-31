@@ -47,5 +47,9 @@ uv pip install -r requirements_linux.txt
 
 # 6. Execute Training
 echo "Starting training..."
-# Path is relative to project root
-python src/train/docking_sim_multi_process.py
+
+# Add the current directory (RPOD_RL) to the Python Search Path
+export PYTHONPATH=$PYTHONPATH:$(pwd)
+
+# Use -u to see logs in real-time (no more waiting!)
+python -u src/train/docking_sim_multi_process.py

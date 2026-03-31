@@ -72,11 +72,7 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
             n_points=100, radius=1.0, theta_max=np.radians(30), 
             range_max=250, theta_solar_max=np.radians(60)
         )
-
-        max_episodes=total_timesteps // num_cpu // n_steps_per_env
-
         rewarders = get_rewarders()
-
         randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="velocity")
 
         env = ConstellationTasking(
