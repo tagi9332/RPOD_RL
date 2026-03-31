@@ -21,19 +21,31 @@ module load uv/0.8.15
 # Since you submit from 'RPOD_RL/slurm', we move up one level to 'RPOD_RL'
 cd ..
 
-# 3. Create/Activate Python 3.12 Environment
-# This solves your 'contourpy' and 'Python version' errors
-if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment with Python 3.12..."
-    uv venv --python 3.12
-fi
-source .venv/bin/activate
+# 3. Destroy any local/broken .venv to force uv to use Scratch
+rm -rf .venv
 
-# 4. Install Dependencies
+# 4. Set up the Scratch Environment
+# Using alpine1 explicitly to match your curc-quota 10TB allocation
+mkdir -p "/scratch/alpine1/$USER"
+export VENV_DIR="/scratch/alpine1/$USER/rpod_env"
+
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating virtual environment on SCRATCH at $VENV_DIR..."
+    uv venv "$VENV_DIR" --python 3.12
+fi
+
+# Activate the scratch environment
+source "$VENV_DIR/bin/activate"
+
+# Verify the environment in the logs
+echo "VIRTUAL_ENV is set to: $VIRTUAL_ENV"
+echo "Using Python from: $(which python)"
+
+# 5. Install Dependencies
 echo "Installing requirements..."
 uv pip install -r requirements_linux.txt
 
-# 5. Execute Training
+# 6. Execute Training
 echo "Starting training..."
 # Path is relative to project root
 python src/train/docking_sim_multi_process.py
