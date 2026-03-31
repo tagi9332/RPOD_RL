@@ -77,7 +77,7 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
 
         rewarders = get_rewarders()
 
-        randomizer = make_sat_arg_randomizer(mode="train")
+        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="velocity")
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -109,9 +109,7 @@ if __name__ == "__main__":
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(model_path, exist_ok=True)
     
-    custom_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])
-    conj_radius_scheduler = ConjunctionRadiusScheduler(initial_radius=400, final_radius=30.0)
-    
+
     # Config
     num_cpu = 14
     n_steps_per_env = 512
@@ -126,7 +124,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = "models/training_run_2026-03-30_13-55-27/rpo_min_dv_spec.zip"
+    LOAD_PATH = "models/training_run_2026-03-31_09-04-41/rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -151,30 +149,55 @@ if __name__ == "__main__":
             ent_coef=entropy_coeff,
             max_grad_norm=max_grad_norm,
         )
-        
-    model.set_logger(custom_logger)
-    
-    # Callbacks
-    time_callback = TimeRemainingCallback(total_steps=int(total_timesteps))
 
+
+    # --- CALLBACKS CONFIGURATION --
+    # 1. Standard callbacks
+    custom_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])
+    time_callback = TimeRemainingCallback(total_steps=int(total_timesteps))
+    
     eval_freq = max(50000 // num_cpu, 1)
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=model_path,
         log_path=log_dir,
         eval_freq=eval_freq,
-        deterministic=True,      # Tests the actual policy, no random thruster noise
-        n_eval_episodes=5,       # Tests 5 different random starting positions
+        deterministic=True,
+        n_eval_episodes=5,
         render=False
     )
 
-    checkpointcallback = CheckpointCallback(save_freq=eval_freq, save_path=model_path, name_prefix="ppo_inspector_multicore_checkpoint")
+    checkpoint_callback = CheckpointCallback(
+        save_freq=eval_freq, 
+        save_path=model_path, 
+        name_prefix="ppo_inspector_multicore_checkpoint"
+    )
 
-    # Combine them into a list
-    callbacks = CallbackList([eval_callback, time_callback, checkpointcallback, conj_radius_scheduler])
+    # 2. Build the callback list dynamically
+    active_callbacks = [eval_callback, time_callback, checkpoint_callback]
 
-    print(f"Starting training on {num_cpu} cores...")
+    # 3. Handle the toggleable Conjunction Radius Scheduler
+    USE_CONJ_RADIUS_SCHEDULER = False
     
+    if USE_CONJ_RADIUS_SCHEDULER:
+        initial_radius = 400.0
+        final_radius = 30.0
+        conj_radius_scheduler = ConjunctionRadiusScheduler(
+            initial_radius=initial_radius, 
+            final_radius=final_radius
+        )
+        active_callbacks.append(conj_radius_scheduler) # Only add if True
+        print(f"Using Conjunction Radius Scheduler: {initial_radius} -> {final_radius}")
+    else:
+        print("Using constant Conjunction Radius (Scheduler disabled).")
+
+    # 4. Finalize the list for the model
+    callbacks = CallbackList(active_callbacks)
+
+    model.set_logger(custom_logger)
+    
+    print(f"Starting training on {num_cpu} cores...")
+  
     try:
         # Run Training
         model.learn(

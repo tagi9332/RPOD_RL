@@ -3,6 +3,10 @@ from typing import Optional, Mapping
 
 import numpy as np
 from bsk_rl.data.base import Data, DataStore, GlobalReward
+from bsk_rl.utils.orbital import cd2hill
+
+# Import simulation parameters for reward configuration
+from resources import illumination_cutoff_range, sun_illumination_cone_angle_deg, illumination_weight
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +34,20 @@ class IlluminationDataStore(DataStore):
         dep_dyn = self.satellite.simulator.satellites[1].dynamics 
         chf_dyn = self.satellite.simulator.satellites[0].dynamics
         
+        # Get inertial positions of Inspector and RSO
         r_dep_N = np.array(dep_dyn.r_BN_N)  # type: ignore
         r_chf_N = np.array(chf_dyn.r_BN_N)  # type: ignore
         
+        # Get inertial position unit vector of the Sun
         world = self.satellite.simulator.world
         sun_msg = world.gravFactory.spiceObject.planetStateOutMsgs[world.sun_index].read()
         r_sun_N = np.array(sun_msg.PositionVector)
-        
-        r_Insp_to_RSO_N = r_chf_N - r_dep_N
-        r_Insp_to_Sun_N = r_sun_N - r_dep_N
-        
-        return np.concatenate([r_Insp_to_RSO_N, r_Insp_to_Sun_N])
+
+        # Compute relative vectors from Inspector to RSO and Sun
+        r_dep_sun_N = r_sun_N - r_dep_N
+        r_dep_chf_N = r_chf_N - r_dep_N
+
+        return np.concatenate([r_dep_chf_N, r_dep_sun_N])
 
     def compare_log_states(self, old_state: np.ndarray, new_state: np.ndarray) -> IlluminationData:
         return IlluminationData(state_vector=new_state)
@@ -56,9 +63,9 @@ class IlluminationReward(GlobalReward):
 
     def __init__(
         self, 
-        weight: float = 1.0, 
-        cutoff_range: float = 100.0,
-        cone_angle_deg: float = 60.0
+        weight: float = illumination_weight, 
+        cutoff_range: float = illumination_cutoff_range,
+        cone_angle_deg: float = sun_illumination_cone_angle_deg
     ):
         super().__init__()
         self.weight = abs(weight)
@@ -70,19 +77,19 @@ class IlluminationReward(GlobalReward):
         for sat_id, data in new_data_dict.items():
             if "RSO" not in sat_id and isinstance(data, IlluminationData):
                 state = data.state_vector
-                r_Insp_to_RSO_N = state[0:3]
-                r_Insp_to_Sun_N = state[3:6]
-                
-                dist_to_rso = np.linalg.norm(r_Insp_to_RSO_N)
-                
-                if dist_to_rso > self.cutoff_range:
-                    dist_to_sun = np.linalg.norm(r_Insp_to_Sun_N)
+                r_dep_chf_N = state[0:3]
+                r_dep_sun_N = state[3:6]
+
+                rel_range = np.linalg.norm(r_dep_chf_N)
+
+                if rel_range > self.cutoff_range:
+                    dist_to_sun = np.linalg.norm(r_dep_sun_N)
                     
-                    if dist_to_rso > 1e-6 and dist_to_sun > 1e-6:
-                        u_cam = r_Insp_to_RSO_N / dist_to_rso
-                        u_sun = r_Insp_to_Sun_N / dist_to_sun
+                    if rel_range > 1e-6 and dist_to_sun > 1e-6:
+                        rho_hat = r_dep_chf_N / rel_range
+                        sun_hat = r_dep_sun_N / dist_to_sun
                         
-                        cos_phase_angle = np.clip(np.dot(u_cam, u_sun), -1.0, 1.0)
+                        cos_phase_angle = np.clip(np.dot(rho_hat, sun_hat), -1.0, 1.0)
                         
                         if cos_phase_angle >= self.cos_limit:
                             # Inside the acceptable lighting cone: give flat positive reward

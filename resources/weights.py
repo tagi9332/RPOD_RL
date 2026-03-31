@@ -11,7 +11,7 @@ docking_reward=10
 max_range_penalty=-3
 
 # Boresight Alignment Reward
-approach_corridor_weight=0.00005
+approach_corridor_weight=0.0001
 
 # Time Penalty
 time_penalty_weight=-0.005

@@ -195,14 +195,34 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
             saveFile=viz_filepath
         )
 
-        # --- BONUS: Visual Helpers ---
-        # Draw a cyan line between the Inspector and the RSO to visualize pointing
-        vizSupport.createPointLine(viz, 
-            fromBodyName=insp_sc.ModelTag, 
-            toBodyName=rso_sc.ModelTag, 
-            lineColor=vizSupport.toRGBA255("cyan")
-        )
+        # --- IMPROVED: Sensor Boresight Visualization ---
         
+        # Define the boresight direction in the Inspector's Body Frame (B)
+        # If your sensor is on the +X axis, use [1, 0, 0]
+        boresight_body = [1.0, 0.0, 0.0] 
+        
+        # # Create a custom sensor to visualize the boresight
+        # # This will draw a cone projecting from the satellite
+        # vizSupport.createCustomSensor(viz, 
+        #     scName=insp_sc.ModelTag,      # Attach to Inspector
+        #     location=[0.0, 0.0, 0.0],     # Origin of sensor (Body frame meters)
+        #     normalVector=boresight_body,  # Direction sensor is pointing (Body frame)
+        #     fieldOfView=20.0 * (np.pi/180.0), # 20 degree cone (helpful for visual alignment)
+        #     range=500.0,                  # How far the visual beam extends (meters)
+        #     color=vizSupport.toRGBA255("cyan")
+        # )
+
+        # # Draw a line specifically to the RSO as well? 
+        # # (Optional: keep this if you want to see the error between boresight and target)
+        # vizSupport.createPointLine(viz, 
+        #     fromBodyName=insp_sc.ModelTag, 
+        #     toBodyName=rso_sc.ModelTag, 
+        #     lineColor=[255, 255, 255, 50] # Faint white line for "Ideal" vector
+        # )
+        
+        # Keep these enabled—they are your best friends for troubleshooting!
+        viz.settings.showSpacecraftLabels = 1
+        viz.settings.showSpacecraftLocalFrames = 1
         # Turn on labels and local body frames (X, Y, Z axes) so you can see 
         # exactly how the Inspector's docking port aligns with the RSO
         viz.settings.showSpacecraftLabels = 1
@@ -294,7 +314,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-03-30_17-23-13\ppo_inspector_multicore_checkpoint_999880_steps.zip"
+    model_path = r"models/training_run_2026-03-31_09-16-08/rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=10)  

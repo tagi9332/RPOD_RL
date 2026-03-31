@@ -279,7 +279,7 @@ if __name__ == "__main__":
 
     env = ConstellationTasking(
         satellites=[rso, inspector],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train"),
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="velocity"),
         scenario=scenario,
         rewarder=rewarders,
         time_limit=SIM_TIME,

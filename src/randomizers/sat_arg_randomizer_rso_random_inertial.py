@@ -16,60 +16,75 @@ from resources import (
     MAX_REL_VEL
 )
 
-def make_sat_arg_randomizer(mode="train"):
+# Standard Earth gravitational parameter in m^3/s^2
+MU_EARTH = 3.986004418e14 
+
+def make_sat_arg_randomizer(mode="train", rso_att_type="random"):
     """
-    Factory function to generate a sat_arg_randomizer based on the execution mode.
-    - "train": Fully randomizes RSO and Inspector on every reset.
-    - "test": Randomizes RSO once, then keeps its absolute orbit and attitude 
-              consistent across all subsequent resets. Inspector remains randomized.
+    Args:
+        mode (str): "train" (randomize every reset) or "test" (persist RSO).
+        rso_att_type (str): "random" (inertial) or "velocity" (prograde).
     """
-    
-    # This dictionary acts as our memory cache across environment resets
     persistent_rso_state = {}
 
     def sat_arg_randomizer(satellites):
-        nonlocal persistent_rso_state # Allows us to modify the outer dictionary
-
-        # Determine if we need to generate fresh RSO parameters
+        nonlocal persistent_rso_state
         generate_new_rso = (mode == "train") or (not persistent_rso_state)
 
         if generate_new_rso:
-            # 1. Generate new Chief Orbit
-            a = (R_EARTH*1000) + np.random.uniform(35776.0*1000, 35796.0*1000)
+            # 1. Generate Chief Orbit (in meters)
+            a_meters = (R_EARTH*1000) + np.random.uniform(35776.0*1000, 35796.0*1000)
             e = np.random.uniform(0.0, 0.0005)
-            chief_orbit = random_orbit(a=a, e=e)
+            chief_orbit = random_orbit(a=a_meters, e=e)
 
-            # 2. Generate new RSO Attitude (MRP)
-            u = np.random.uniform(0, 1, 3)
-            q0 = np.sqrt(1 - u[0]) * np.sin(2 * np.pi * u[1])
-            q1 = np.sqrt(1 - u[0]) * np.cos(2 * np.pi * u[1])
-            q2 = np.sqrt(u[0]) * np.sin(2 * np.pi * u[2])
-            q3 = np.sqrt(u[0]) * np.cos(2 * np.pi * u[2])
+            # 2. Determine RSO Attitude
+            if rso_att_type == "velocity":
+                # Corrected: Pass MU and the elements object
+                r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
+                
+                # Create the Velocity-Aligned Frame
+                # Unit 1: Prograde (Velocity direction)
+                i_v = v_N / np.linalg.norm(v_N)
+                
+                # Unit 2: Orbit Normal (Cross-track)
+                h_vec = np.cross(r_N, v_N)
+                i_n = h_vec / np.linalg.norm(h_vec)
+                
+                # Unit 3: Completes the right-handed set (Radial-ish)
+                i_b = np.cross(i_v, i_n)
+                
+                # DCM [VN]: Rows are the unit vectors of the V-frame in N-frame
+                dcm_VN = np.array([i_v, i_n, i_b])
+                
+                # Convert DCM to MRP
+                sigma_init = C2MRP(dcm_VN)
             
-            sigma_init = np.array([q1, q2, q3]) / (1 + q0)
-            if np.linalg.norm(sigma_init) > 1:
-                sigma_init = -sigma_init / (np.linalg.norm(sigma_init)**2)
+            else: # "random"
+                u = np.random.uniform(0, 1, 3)
+                q0 = np.sqrt(1 - u[0]) * np.sin(2 * np.pi * u[1])
+                q1 = np.sqrt(1 - u[0]) * np.cos(2 * np.pi * u[1])
+                q2 = np.sqrt(u[0]) * np.sin(2 * np.pi * u[2])
+                q3 = np.sqrt(u[0]) * np.cos(2 * np.pi * u[2])
+                
+                sigma_init = np.array([q1, q2, q3]) / (1 + q0)
+                if np.linalg.norm(sigma_init) > 1:
+                    sigma_init = -sigma_init / (np.linalg.norm(sigma_init)**2)
 
-            omega_init = np.array([0.0, 0.0, 0.0])
-
-            # Cache these so we can reuse them if mode == "test"
             persistent_rso_state = {
                 "chief_orbit": chief_orbit,
                 "sigma_init": sigma_init,
-                "omega_init": omega_init
+                "omega_init": np.array([0.0, 0.0, 0.0])
             }
 
-        # Retrieve the parameters (either fresh ones or cached ones)
+        # --- Retrieval and Assignment ---
         chief_orbit = persistent_rso_state["chief_orbit"]
         sigma_init = persistent_rso_state["sigma_init"]
         omega_init = persistent_rso_state["omega_init"]
 
-        # --- Apply the states to the satellites ---
         inspectors = [sat for sat in satellites if "Inspector" in sat.name]
-        rso = [satellite for satellite in satellites if satellite.name == "RSO"][0]
+        rso = [s for s in satellites if s.name == "RSO"][0]
         args = {}
         
-        # The Inspector's relative state is ALWAYS randomized, regardless of mode
         for inspector in inspectors:
             relative_randomizer = relative_to_chief(
                 chief_name="RSO", chief_orbit=chief_orbit,
@@ -82,7 +97,6 @@ def make_sat_arg_randomizer(mode="train"):
             )
             args.update(relative_randomizer([rso, inspector]))
         
-        # Apply the RSO attitude logic
         args[rso]["sigma_init"] = sigma_init
         args[rso]["omega_init"] = omega_init
         

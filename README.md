@@ -12,3 +12,7 @@ This project trains an autonomous "Inspector" satellite agent to perform orbital
    ```bash
    git clone <https://github.com/tagi9332/RPOD_RL.git>
    cd rpod_rl
+
+## Training
+* **To Monitor Training:**
+   ```tensorboard --logdir ./logs/
