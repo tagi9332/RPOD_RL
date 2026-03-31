@@ -52,4 +52,4 @@ echo "Starting training..."
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 # Use -u to see logs in real-time (no more waiting!)
-python -u src/train/docking_sim_multi_process.py
+python -u src/train/docking_sim_multi_process_slurm.py
