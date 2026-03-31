@@ -22,7 +22,7 @@ module load git
 module load uv/0.8.15
 
 # Load the standard Python (Alpine usually uses 'python' or 'anaconda')
-module load python
+module load python/3.10.2
 
 # --- Git Repository Setup ---
 REPO_URL="https://github.com/tagi9332/RPOD_RL.git"
