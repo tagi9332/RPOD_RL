@@ -52,4 +52,4 @@ uv pip install -r requirements.txt
 
 # --- Execute Training ---
 echo "Starting training..."
-python train.py
+python src/train/docking_sim_multi_process.py
