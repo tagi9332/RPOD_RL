@@ -31,7 +31,7 @@ source .venv/bin/activate
 
 # 4. Install Dependencies
 echo "Installing requirements..."
-uv pip install -r requirements.txt
+uv pip install -r requirements_linux.txt
 
 # 5. Execute Training
 echo "Starting training..."
