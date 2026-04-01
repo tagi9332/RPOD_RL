@@ -13,6 +13,9 @@ from bsk_rl.sim import fsw
 from Basilisk.architecture import bskLogging
 from Basilisk.utilities import RigidBodyKinematics as rbk
 from Basilisk.utilities import vizSupport
+from Basilisk.utilities import macros
+
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 # Base training script imports
 from src.train import (
@@ -39,7 +42,8 @@ from utils.plotting import (
     plot_mc_distributions,
     plot_all_trajectories,
     plot_summary_table,
-    plot_pareto_front
+    plot_pareto_front,
+    plot_single_run_rewards
 )
 # Import weights
 from resources import (
@@ -136,10 +140,53 @@ class InferenceEnv(Sb3BksEnv):
             
             # Consumables
             info["metrics"]["dV_remaining"] = inspector.fsw.dv_available if hasattr(inspector.fsw, 'dv_available') else 0.0
-        
+            
+            # --- NEW: Extract Reward Components ---
+            if hasattr(self.env, 'rewarder'):
+                rewarder_iterable = self.env.rewarder if isinstance(self.env.rewarder, (list, tuple)) else [self.env.rewarder]
+                for rew_obj in rewarder_iterable:
+                    name = rew_obj.__class__.__name__
+                    if name == "ResourceReward":
+                        # BSK-RL's built-in ResourceReward stores the last computed dict in .reward
+                        val = rew_obj.reward.get("Inspector", 0.0) if hasattr(rew_obj, 'reward') else 0.0
+                    else:
+                        # Our custom telemetry hook saves it to .last_reward
+                        val = getattr(rew_obj, 'last_reward', 0.0)
+                    
+                    info["metrics"][f"rew_{name}"] = val        
         return obs, reward, terminated, truncated, info
 
 # --- Inference Loop ---
+def enable_eval_reward_telemetry(env):
+    """
+    Patches rewarders, including those nested inside a ComposedReward.
+    """
+    # 1. Get a flat list of all rewarders
+    raw_rewarders = env.rewarder if isinstance(env.rewarder, (list, tuple)) else [env.rewarder]
+    flat_rewarders = []
+    
+    for r in raw_rewarders:
+        if r.__class__.__name__ == "ComposedReward":
+            # If it's a container, grab everything inside it
+            flat_rewarders.extend(r.rewarders)
+        else:
+            flat_rewarders.append(r)
+
+    # 2. Patch each individual rewarder
+    for rew_obj in flat_rewarders:
+        if hasattr(rew_obj, 'calculate_reward'):
+            orig_method = rew_obj.calculate_reward
+            
+            def create_patched_method(obj, orig_fn):
+                def patched_calculate_reward(new_data_dict):
+                    reward_dict = orig_fn(new_data_dict)
+                    # Store the component value
+                    obj.last_reward = reward_dict.get("Inspector", 0.0)
+                    return reward_dict
+                return patched_calculate_reward
+            
+            rew_obj.calculate_reward = create_patched_method(rew_obj, orig_method)
+
 def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     scenario = scene.SphericalRSO(n_points=100, radius=1.0, theta_max=np.radians(30), range_max=250, theta_solar_max=np.radians(60))
     
@@ -148,11 +195,23 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="test"), scenario=scenario, rewarder=rewarders, time_limit=SIM_TIME, sim_rate=SIM_DT, log_level="WARNING"
+        sat_arg_randomizer=sat_arg_randomizer(mode="test", rso_att_type="velocity"), 
+        scenario=scenario, 
+        rewarder=rewarders, 
+        time_limit=SIM_TIME, 
+        sim_rate=SIM_DT, 
+        log_level="WARNING"
     )
 
-    env_sb3 = InferenceEnv(env)
-    env_sb3 = FlattenObservation(env_sb3)
+    enable_eval_reward_telemetry(env)
+
+    # 1. Create a specific helper function to instantiate the wrapped environment
+    def make_env():
+        base_env = InferenceEnv(env)
+        return FlattenObservation(base_env)
+
+    # 2. Pass the function pointer directly to DummyVecEnv
+    env_sb3 = DummyVecEnv([make_env])
 
     try:
         model = PPO.load(model_path, device="cpu")
@@ -165,11 +224,11 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
 
     for run_idx in range(num_runs):
         print(f"--- Executing Run {run_idx + 1}/{num_runs} ---")
-        obs, _ = env_sb3.reset()
-        if isinstance(obs, tuple): obs = obs[0]
+        # DummyVecEnv only returns the observation, no info dict!
+        obs = env_sb3.reset()
 
         # ====================================================================
-        # --- VIZARD INTEGRATION ---
+        # --- VIZARD INTEGRATION OVERHAUL ---
         # 1. Grab the raw Basilisk simulator directly from the base env
         sim = env.simulator
 
@@ -195,43 +254,84 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
             saveFile=viz_filepath
         )
 
-        # --- IMPROVED: Sensor Boresight Visualization ---
+        # --- THE OVERHAUL: RPO & DOCKING VISUALS ---
         
-        # Define the boresight direction in the Inspector's Body Frame (B)
-        # If your sensor is on the +X axis, use [1, 0, 0]
-        boresight_body = [1.0, 0.0, 0.0] 
-        
-        # # Create a custom sensor to visualize the boresight
-        # # This will draw a cone projecting from the satellite
-        # vizSupport.createCustomSensor(viz, 
-        #     scName=insp_sc.ModelTag,      # Attach to Inspector
-        #     location=[0.0, 0.0, 0.0],     # Origin of sensor (Body frame meters)
-        #     normalVector=boresight_body,  # Direction sensor is pointing (Body frame)
-        #     fieldOfView=20.0 * (np.pi/180.0), # 20 degree cone (helpful for visual alignment)
-        #     range=500.0,                  # How far the visual beam extends (meters)
-        #     color=vizSupport.toRGBA255("cyan")
-        # )
+        # A. Trajectory & Relative Motion (CRITICAL)
+        # Instead of dizzying global orbits, draw the Inspector's path relative to the RSO
+        viz.settings.orbitLinesOn = 2              # 2 = Relative to chief spacecraft
+        viz.settings.trueTrajectoryLinesOn = 2     # 2 = True path relative to chief
+        viz.settings.relativeOrbitFrame = 1        # 1 = Use Hill Frame (Standard for RPO)
+        viz.settings.showHillFrame = 1             # Draw the Hill frame axes (Radial, Along-track, Cross-track)
+        viz.liveSettings.relativeOrbitChief = rso_sc.ModelTag # Set RSO as the center of the universe
 
-        # # Draw a line specifically to the RSO as well? 
-        # # (Optional: keep this if you want to see the error between boresight and target)
-        # vizSupport.createPointLine(viz, 
-        #     fromBodyName=insp_sc.ModelTag, 
-        #     toBodyName=rso_sc.ModelTag, 
-        #     lineColor=[255, 255, 255, 50] # Faint white line for "Ideal" vector
-        # )
-        
-        # Keep these enabled—they are your best friends for troubleshooting!
+        # B. Spacecraft Frames & Labels
         viz.settings.showSpacecraftLabels = 1
-        viz.settings.showSpacecraftLocalFrames = 1
-        # Turn on labels and local body frames (X, Y, Z axes) so you can see 
-        # exactly how the Inspector's docking port aligns with the RSO
-        viz.settings.showSpacecraftLabels = 1
-        viz.settings.showSpacecraftLocalFrames = 1 
+        viz.settings.spacecraftCSon = 1            # Show local X, Y, Z axes of the spacecraft
+        viz.settings.showCSLabels = 1              # Label those axes (helps align docking ports)
 
-        # 6. CRITICAL FIX: Do NOT call sim.InitializeSimulation() here!
-        # env.reset() already set up your randomized initial states. 
-        # Instead, just initialize the specific Vizard module we just added to the task
-        # so it allocates memory without wiping your RL environment states.
+        # C. Camera & HUD Settings
+        viz.settings.mainCameraTarget = insp_sc.ModelTag # Focus the camera on your RL agent
+        viz.settings.viewCameraBoresightHUD = 1    # Draws a line out the front of your camera
+        viz.settings.viewCameraFrustumHUD = 1      # Draws the sensor cone
+        viz.settings.showDataRateDisplay = -1      # Hide clutter
+        viz.settings.ambient = 0.5                 # Brighten the dark side of the spacecraft a bit
+
+        # D. Actuator Visibility (Debug the Suicide Burn)
+        # This will show a UI panel of thruster forces AND draw plumes coming out of the ship!
+        vizSupport.setActuatorGuiSetting(viz, 
+            spacecraftName=insp_sc.ModelTag,
+            viewThrusterPanel=1, 
+            viewThrusterHUD=1, 
+            showThrusterLabels=1
+        )
+
+        # ====================================================================
+        # --- ADVANCED GEOMETRY OVERLAY (CORRECTED) ---
+        
+        # 1. The Docking Keep-In Corridor
+        # createConeInOut draws a physical cone and checks the angle between the 
+        # normal vector and the vector to the target body.
+        vizSupport.createConeInOut(viz,
+            fromBodyName=rso_sc.ModelTag,      # Cone originates from the RSO
+            toBodyName=insp_sc.ModelTag,       # Evaluates if the Inspector is inside it
+            normalVector_B=docking_port_boresight,    # Direction of the RSO's docking port (+X axis)
+            incidenceAngle=approach_corridor_angle_deg * macros.D2R,  # 15-degree half-angle safe approach corridor
+            coneHeight=200.0,                  # Draw the cone out to 200 meters
+            coneColor="green", 
+            isKeepIn=True,                     # True = Keep-In cone
+            coneName="dockingCorridor"
+        )
+
+        # 2. Inspector Sensor Boresight
+        vizSupport.createConeInOut(viz,
+            fromBodyName=insp_sc.ModelTag,     # Originates from Inspector
+            toBodyName=rso_sc.ModelTag,        # Evaluates if RSO is within the FOV
+            normalVector_B=inspector_boresight,    # Assuming Inspector sensor points along its +X
+            incidenceAngle=20.0 * macros.D2R,  # 20-degree half-angle FOV
+            coneHeight=30,                  # Max range of the sensor
+            coneColor="cyan",
+            isKeepIn=True,                     
+            coneName="sensorBoresight"
+        )
+
+        # 3. Dynamic Sun Vector
+        # Draws a line constantly pointing from the Inspector to the Sun.
+        vizSupport.createPointLine(viz,
+            fromBodyName=insp_sc.ModelTag,
+            toBodyName="sun",                  # Vizard recognizes "sun" natively
+            lineColor="yellow" 
+        )
+        
+        # 4. Target Vector 
+        # Draws a line from the Inspector directly to the RSO.
+        vizSupport.createPointLine(viz,
+            fromBodyName=insp_sc.ModelTag,
+            toBodyName=rso_sc.ModelTag,
+            lineColor="white"     
+        )
+        # ====================================================================
+
+        # 6. Initialize memory without wiping RL states
         viz.Reset(0)
         # ====================================================================
             
@@ -314,7 +414,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-03-31_11-14-01\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-03-31_19-25-20\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=10)  
@@ -347,10 +447,10 @@ if __name__ == "__main__":
 
     plot_control_analysis(processed_data_best, os.path.join(output_folder, "best_run"))
     plot_trajectory_analysis(processed_data_best, os.path.join(output_folder, "best_run"))
-    animate_results(processed_data_best, os.path.join(output_folder, "best_run"))
+    plot_single_run_rewards(best_run_df, os.path.join(output_folder, "best_run"), prefix="best_")
 
     plot_control_analysis(processed_data_worst, os.path.join(output_folder, "worst_run"))
     plot_trajectory_analysis(processed_data_worst, os.path.join(output_folder, "worst_run"))
-    animate_results(processed_data_worst, os.path.join(output_folder, "worst_run"))
+    plot_single_run_rewards(worst_run_df, os.path.join(output_folder, "worst_run"), prefix="worst_")
 
     print("\nAll inferences and plots complete!")

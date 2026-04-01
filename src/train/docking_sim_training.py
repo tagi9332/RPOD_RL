@@ -46,7 +46,8 @@ from resources import (
     entropy_coeff,
     max_grad_norm,
     approach_corridor_angle_deg,
-    clip_range
+    clip_range,
+    misalignment_discount_factor
 )
 
 # Set BSK logging level
@@ -200,12 +201,24 @@ class Sb3BksEnv(gym.Env):
                 angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
                 angle_deg = np.degrees(angle_rad)
                 
-                # Apply Sparse Reward based on the docking angle cone
+                # ====================================================================
+                # --- NEW: SCALED SPARSE REWARD LOGIC ---
+                # ====================================================================
                 if angle_deg <= approach_corridor_angle_deg:
-                    reward_dict[self.agent_name] += docking_reward
-                    inspector_sat.logger.info(f"SUCCESSFUL DOCKING! Angle: {angle_deg:.2f} deg at sim time {self.env.simulator.sim_time:.2f}s")
+                    # Determine how much to penalize a sloppy docking. 
+                    # 0.2 means the reward drops to 80% at the extreme edge of the cone.
+                    max_penalty_fraction = 1 - misalignment_discount_factor 
+                    
+                    # Multiplier is 1.0 at 0 degrees, and 0.8 at max corridor angle
+                    alignment_multiplier = 1.0 - max_penalty_fraction * (angle_deg / approach_corridor_angle_deg)
+                    
+                    # Calculate final scaled reward (e.g., 10 * 1.0 = 10, or 10 * 0.8 = 8)
+                    scaled_docking_reward = docking_reward * alignment_multiplier
+                    
+                    reward_dict[self.agent_name] += scaled_docking_reward
+                    inspector_sat.logger.info(f"SUCCESSFUL DOCKING! Angle: {angle_deg:.2f} deg, Reward: {scaled_docking_reward:.2f} at sim time {self.env.simulator.sim_time:.2f}s")
                 else:
-                    # Optional: Apply a crash penalty if it hits the wrong side of the RSO
+                    # Apply a crash penalty if it hits the wrong side of the RSO
                     reward_dict[self.agent_name] += conjunction_penalty 
                     inspector_sat.logger.info(f"FAILED DOCKING (Collision). Angle: {angle_deg:.2f} deg at sim time {self.env.simulator.sim_time:.2f}s")
 

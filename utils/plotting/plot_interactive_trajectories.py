@@ -19,7 +19,7 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
 
     success_plotted = False
     fail_plotted = False
-    start_plotted = False # <--- Add this flag
+    start_plotted = False
 
     # 2. Loop through each run and plot the trajectory
     for idx, run_df in enumerate(all_runs_data):
@@ -40,10 +40,12 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
             show_legend = False
             legend_name = "Successful Approach" if is_success else "Failed/Timeout"
 
-        # The trajectory line
+        # --- THE FIX: SWAPPED X AND Y MAPPING ---
+        # Map In-Track (velocity) to the primary visual X-axis
+        # Map Radial to the visual Y-axis
         fig.add_trace(go.Scatter3d(
-            x=run_df["hill_x"], 
-            y=run_df["hill_y"], 
+            x=run_df["hill_y"], # <--- Now In-Track is visually forward/back
+            y=run_df["hill_x"], # <--- Now Radial is visually left/right
             z=run_df["hill_z"],
             mode='lines',
             line=dict(color=color, width=3),
@@ -54,21 +56,19 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
             hoverinfo='skip' 
         ))
 
-        # --- Updated Start Position Logic ---
-        # Only show legend for the very first blue dot
         show_start_legend = False
         if not start_plotted:
             show_start_legend = True
             start_plotted = True
 
         fig.add_trace(go.Scatter3d(
-            x=[run_df["hill_x"].iloc[0]], 
-            y=[run_df["hill_y"].iloc[0]], 
+            x=[run_df["hill_y"].iloc[0]], # <--- Swapped to match above
+            y=[run_df["hill_x"].iloc[0]], # <--- Swapped to match above
             z=[run_df["hill_z"].iloc[0]],
             mode='markers',
             marker=dict(size=4, color='blue', opacity=0.7),
-            name="Initial Position", # <--- Cleaned up name
-            legendgroup="initial_pos", # <--- Separate group for clarity
+            name="Initial Position", 
+            legendgroup="initial_pos", 
             showlegend=show_start_legend,
             hovertext=f"Run {idx + 1} Start",
             hoverinfo="text"
@@ -76,11 +76,12 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
 
     # 3. Format the Layout
     fig.update_layout(
-        title="Monte Carlo Trajectories",
+        title="Monte Carlo Trajectories (RSO aligned to Velocity)",
         scene=dict(
-            xaxis_title='Radial X (m)',
-            yaxis_title='In-Track Y (m)',
-            zaxis_title='Cross-Track Z (m)',
+            # --- THE FIX: CORRECTED AXIS TITLES ---
+            xaxis_title='In-Track / Velocity (m)',
+            yaxis_title='Radial (m)',
+            zaxis_title='Cross-Track (m)',
             xaxis=dict(gridcolor='gray', showbackground=False),
             yaxis=dict(gridcolor='gray', showbackground=False),
             zaxis=dict(gridcolor='gray', showbackground=False),

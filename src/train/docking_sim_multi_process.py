@@ -109,7 +109,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 5_000_000 
+    total_timesteps = 1_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0, total_timesteps=total_timesteps, num_cpu=num_cpu, n_steps_per_env=n_steps_per_env) for i in range(num_cpu)])    
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = "models/training_run_2026-03-31_11-14-01/rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models/training_run_2026-03-31_20-05-36/rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):

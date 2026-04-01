@@ -14,9 +14,9 @@ class TimeRemainingCallback(BaseCallback):
         self.start_time = time.time()
 
     def _on_step(self) -> bool:
-        # Check progress every 100000 AGGREGATE steps
+        # Check progress every 50000s AGGREGATE steps
         # We use num_timesteps because it accounts for all parallel environments
-        if self.num_timesteps % 100000 < self.training_env.num_envs:
+        if self.num_timesteps % 50000 < self.training_env.num_envs:
             if self.num_timesteps > 0:
                 current_time = time.time()
                 elapsed_time = current_time - self.start_time

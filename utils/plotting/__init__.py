@@ -7,3 +7,4 @@ from utils.plotting.plot_all_trajectories import plot_all_trajectories
 from utils.plotting.plot_summary_table import plot_summary_table
 from utils.plotting.plot_pareto_front import plot_pareto_front
 from utils.plotting.plot_training_data import plot_training_data
+from utils.plotting.plot_rewards import plot_single_run_rewards, plot_mc_reward_summary
