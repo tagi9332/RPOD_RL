@@ -22,7 +22,7 @@ approach_corridor_angle_deg=30
 final_corridor_angle_deg=5
 
 # Phase Transition Parameters
-docking_phase_range_threshold=500
+docking_phase_range_threshold=100
 final_docking_distance=30.0
 
 # Satellite Boresights
@@ -53,7 +53,7 @@ inspector_sat_args = dict(
     dataStorageCapacity=1e6,
     batteryStorageCapacity=1e12,
     storedCharge_Init=1e12,
-    conjunction_radius=30,
+    conjunction_radius=10,
     dv_available_init=150,
     max_range_radius=5000,
     chief_name="RSO",
