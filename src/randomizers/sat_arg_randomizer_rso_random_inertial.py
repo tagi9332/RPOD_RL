@@ -19,11 +19,12 @@ from resources import (
 # Standard Earth gravitational parameter in m^3/s^2
 MU_EARTH = 3.986004418e14 
 
-def make_sat_arg_randomizer(mode="train", rso_att_type="random"):
+def make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity",max_error_deg=5):
     """
     Args:
         mode (str): "train" (randomize every reset) or "test" (persist RSO).
-        rso_att_type (str): "random" (inertial) or "velocity" (prograde).
+        rso_att_type (str): "random" (inertial), "velocity" (prograde), or "near_velocity" (perturbed prograde).
+        max_error_deg (float): Maximum pointing error in degrees. Only used if rso_att_type is "near_velocity".
     """
     persistent_rso_state = {}
 
@@ -38,10 +39,8 @@ def make_sat_arg_randomizer(mode="train", rso_att_type="random"):
             chief_orbit = random_orbit(a=a_meters, e=e)
 
             # 2. Determine RSO Attitude
-            if rso_att_type == "velocity":
-                # Corrected: Pass MU and the elements object
+            if rso_att_type in ["velocity", "near_velocity"]:
                 r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
-                
                 # Create the Velocity-Aligned Frame
                 # Unit 1: Prograde (Velocity direction)
                 i_v = v_N / np.linalg.norm(v_N)
@@ -56,7 +55,29 @@ def make_sat_arg_randomizer(mode="train", rso_att_type="random"):
                 # DCM [VN]: Rows are the unit vectors of the V-frame in N-frame
                 dcm_VN = np.array([i_v, i_n, i_b])
                 
-                # Convert DCM to MRP
+                # Apply Perturbation if "near_velocity"
+                if rso_att_type == "near_velocity":
+                    # 5% pointing error (approx 0.05 radians or ~2.86 degrees)
+                    max_error_rad = np.radians(max_error_deg)
+                    angle = np.random.uniform(0, max_error_rad)
+                    
+                    # Generate a random axis of rotation
+                    axis = random_unit_vector()
+                    
+                    # Build Skew-Symmetric matrix K for the axis
+                    K = np.array([
+                        [0, -axis[2], axis[1]],
+                        [axis[2], 0, -axis[0]],
+                        [-axis[1], axis[0], 0]
+                    ])
+                    
+                    # Rodrigues' rotation formula to create the error DCM
+                    dcm_err = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
+                    
+                    # Apply the error rotation to the base V-bar DCM
+                    dcm_VN = np.dot(dcm_err, dcm_VN)
+                
+                # Convert final DCM to MRP
                 sigma_init = C2MRP(dcm_VN)
             
             else: # "random"
