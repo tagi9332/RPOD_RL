@@ -195,7 +195,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="test", rso_att_type="velocity"), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="test", rso_att_type="random"), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 
@@ -414,10 +414,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models/training_run_2026-03-31_20-08-21/rpo_min_dv_spec.zip"
+    model_path = r"models/training_run_2026-04-01_16-29-22/rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=50)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)

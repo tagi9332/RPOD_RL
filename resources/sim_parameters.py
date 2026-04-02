@@ -12,7 +12,7 @@ MAX_DRIFT_DURATION = 300 # s
 
 # Relative State Initialization Bounds
 MAX_REL_POS = 2000  # meters
-MIN_REL_POS = 1000     # meters
+MIN_REL_POS = 1500     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 

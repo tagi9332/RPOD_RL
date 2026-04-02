@@ -23,4 +23,4 @@ time_penalty_weight=-0.005
 conjunction_penalty=-2
 
 # Illumination Reward
-illumination_weight=0.0005
+illumination_weight=0.0025

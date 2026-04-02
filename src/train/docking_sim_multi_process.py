@@ -109,7 +109,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 500_000 
+    total_timesteps = 2_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0, total_timesteps=total_timesteps, num_cpu=num_cpu, n_steps_per_env=n_steps_per_env) for i in range(num_cpu)])    
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models/training_run_2026-03-31_20-05-36/rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models\training_run_2026-03-31_20-08-21\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     active_callbacks = [eval_callback, time_callback, checkpoint_callback]
 
     # 3. Handle the toggleable Conjunction Radius Scheduler
-    USE_CONJ_RADIUS_SCHEDULER = True
+    USE_CONJ_RADIUS_SCHEDULER = False
     
     if USE_CONJ_RADIUS_SCHEDULER:
         initial_radius = 30.0
