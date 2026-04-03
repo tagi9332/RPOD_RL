@@ -7,6 +7,12 @@ import numpy as np
 from bsk_rl.data.base import Data, DataStore, GlobalReward
 from bsk_rl.utils.orbital import cd2hill
 
+from resources import (
+    final_docking_distance,
+    approach_velocity_weight,
+    rel_range_log_weight
+)
+
 logger = logging.getLogger(__name__)
 
 class RelativeRangeData(Data):
@@ -60,8 +66,10 @@ class RelativeRangeLogReward(GlobalReward):
 
     def __init__(
         self,
-        alpha: float = -0.1,
+        alpha: float = rel_range_log_weight,
         delta_x_max: Union[list, np.ndarray, None] = None,
+        final_docking_distance: float = final_docking_distance,
+        velocity_weight: float = approach_velocity_weight,
     ):
         """
         Logarithmic reward for proximity operations.
@@ -69,9 +77,16 @@ class RelativeRangeLogReward(GlobalReward):
         Args:
             alpha: Scaling factor for the log reward.
             delta_x_max: Normalization constants [x, y, z, vx, vy, vz].
+            final_docking_distance: Distance threshold (meters) to start penalizing velocity more heavily.
+            velocity_weight: Multiplier applied to velocity errors when inside the final docking distance.
         """
         super().__init__()
         self.alpha = alpha
+        
+        # New parameters for docking precision
+        self.final_docking_distance = final_docking_distance
+        self.velocity_weight = velocity_weight
+        
         if delta_x_max is None:
             self.delta_x_max = np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])
         else:
@@ -84,18 +99,24 @@ class RelativeRangeLogReward(GlobalReward):
         reward = {}
         for sat_id, data in new_data_dict.items():
             if isinstance(data, RelativeRangeData):
-                state = data.state_vector
+                state = data.state_vector.copy() # Use copy to prevent mutating the stored data
                 
                 if np.any(state):
                     # Normalize the state
                     normalized = state / self.delta_x_max
+
+                    # Check relative distance and accentuate velocity if necessary
+                    distance = np.linalg.norm(state[:3])
+                    if distance < self.final_docking_distance:
+                        # Multiply the velocity components (indices 3, 4, 5) by the weight
+                        normalized[3:] *= self.velocity_weight
 
                     # Calculate MSE and log reward
                     mse = np.mean(normalized**2)
                     reward[sat_id] = float(self.alpha * np.log(mse + 1e-8))
 
                     # Debug prints
-                    logger.debug(f"Reward Calculation for {sat_id}: state={state}, normalized={normalized}, mse={mse}, reward={reward[sat_id]}")
+                    logger.debug(f"Reward Calculation for {sat_id}: distance={distance:.2f}, mse={mse}, reward={reward[sat_id]}")
                 else:
                     reward[sat_id] = 0.0
             else:

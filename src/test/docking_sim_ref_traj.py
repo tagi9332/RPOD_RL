@@ -43,7 +43,8 @@ from utils.plotting import (
     plot_all_trajectories,
     plot_summary_table,
     plot_pareto_front,
-    plot_single_run_rewards
+    plot_single_run_rewards,
+    plot_last_100m_views
 )
 # Import weights
 from resources import (
@@ -195,7 +196,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="test", rso_att_type="random"), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=90), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 
@@ -262,7 +263,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         viz.settings.trueTrajectoryLinesOn = 2     # 2 = True path relative to chief
         viz.settings.relativeOrbitFrame = 1        # 1 = Use Hill Frame (Standard for RPO)
         viz.settings.showHillFrame = 1             # Draw the Hill frame axes (Radial, Along-track, Cross-track)
-        viz.liveSettings.relativeOrbitChief = rso_sc.ModelTag # Set RSO as the center of the universe
+        viz.settings.relativeOrbitChief = rso_sc.ModelTag # Set RSO as the center of the universe
 
         # B. Spacecraft Frames & Labels
         viz.settings.showSpacecraftLabels = 1
@@ -275,15 +276,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         viz.settings.viewCameraFrustumHUD = 1      # Draws the sensor cone
         viz.settings.showDataRateDisplay = -1      # Hide clutter
         viz.settings.ambient = 0.5                 # Brighten the dark side of the spacecraft a bit
-
-        # D. Actuator Visibility (Debug the Suicide Burn)
-        # This will show a UI panel of thruster forces AND draw plumes coming out of the ship!
-        vizSupport.setActuatorGuiSetting(viz, 
-            spacecraftName=insp_sc.ModelTag,
-            viewThrusterPanel=1, 
-            viewThrusterHUD=1, 
-            showThrusterLabels=1
-        )
+        viz.liveSettings.relativeOrbitChief=rso_sc.ModelTag # Ensure all relative visuals are centered on the RSO
 
         # ====================================================================
         # --- ADVANCED GEOMETRY OVERLAY (CORRECTED) ---
@@ -294,7 +287,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         vizSupport.createConeInOut(viz,
             fromBodyName=rso_sc.ModelTag,      # Cone originates from the RSO
             toBodyName=insp_sc.ModelTag,       # Evaluates if the Inspector is inside it
-            normalVector_B=docking_port_boresight,    # Direction of the RSO's docking port (+X axis)
+            normalVector_B=[0, 0, 1],    # Direction of the RSO's docking port (+X axis)
             incidenceAngle=approach_corridor_angle_deg * macros.D2R,  # 15-degree half-angle safe approach corridor
             coneHeight=200.0,                  # Draw the cone out to 200 meters
             coneColor="green", 
@@ -414,10 +407,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models/training_run_2026-04-01_16-29-22/rpo_min_dv_spec.zip"
+    model_path = r"models\rpo_90deg_attitude.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=100)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)
@@ -425,6 +418,7 @@ if __name__ == "__main__":
         plot_summary_table(summary_df, output_folder)
         plot_mc_distributions(all_runs_data, summary_df, output_folder)
         plot_pareto_front(all_runs_data, summary_df, output_folder)
+        plot_last_100m_views(all_runs_data, summary_df, output_folder)
 
     # Trim down to worst and best runs
     worst_run_id = summary_df.sort_values(by="total_reward", ascending=True).iloc[0]["run_id"] #type: ignore

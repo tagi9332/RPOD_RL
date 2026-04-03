@@ -3,6 +3,7 @@ dv_reward_weight=0.0001
 
 # RelativeRangeLogReward
 rel_range_log_weight=-0.0003
+approach_velocity_weight = 5.0
 
 # Docking Reward
 docking_reward=10

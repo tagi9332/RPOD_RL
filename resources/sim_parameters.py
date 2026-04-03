@@ -23,7 +23,7 @@ final_corridor_angle_deg=5
 
 # Phase Transition Parameters
 docking_phase_range_threshold=100
-final_docking_distance=30.0
+final_docking_distance=30
 
 # Satellite Boresights
 inspector_boresight = np.array([0.0, 0.0, 1.0])

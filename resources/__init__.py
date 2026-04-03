@@ -8,7 +8,8 @@ from .weights import (
     approach_corridor_weight,
     conjunction_penalty,
     time_penalty_weight,
-    illumination_weight
+    illumination_weight,
+    approach_velocity_weight
 
 )
 from .hyperparameters import (
