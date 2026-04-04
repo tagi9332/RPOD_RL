@@ -27,6 +27,10 @@ from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_
 # Import custom rewarders
 from src.rewarders import get_rewarders
 
+# Import custom inspector state randomizer
+from src.randomizers.inspector_state_randomizer import generate_random_inspector_state
+
+
 # Local plotting scripts
 from utils.plotting import (
     animate_results,
@@ -189,10 +193,13 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     
     rewarders = get_rewarders()
 
+    # Instantiate a set inspector state for testing
+    fixed_inspector_state = generate_random_inspector_state()
+
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="velocity", max_error_deg=90), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="velocity", fixed_inspector_state=fixed_inspector_state), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 
@@ -307,9 +314,10 @@ if __name__ == "__main__":
 
     # --------------------------- Model Path Configuration ---------------------------
     model_path = r"models\rpo_90deg_attitude_error.zip"
+    num_runs = 20
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=num_runs)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)

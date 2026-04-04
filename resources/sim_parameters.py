@@ -18,7 +18,7 @@ MIN_REL_VEL = 0.0      # m/s
 
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)
-approach_corridor_angle_deg=30
+approach_corridor_angle_deg=15
 final_corridor_angle_deg=5
 
 # Phase Transition Parameters

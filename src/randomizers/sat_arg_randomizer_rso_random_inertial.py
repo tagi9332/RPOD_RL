@@ -19,12 +19,14 @@ from resources import (
 # Standard Earth gravitational parameter in m^3/s^2
 MU_EARTH = 3.986004418e14 
 
-def make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity",max_error_deg=5):
+def make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=5, fixed_inspector_state=None):
     """
     Args:
         mode (str): "train" (randomize every reset) or "test" (persist RSO).
-        rso_att_type (str): "random" (inertial), "velocity" (prograde), or "near_velocity" (perturbed prograde).
+        rso_att_type (str): "random" (inertial), "velocity" (prograde), "anti_velocity" (retrograde), or "near_velocity" (perturbed prograde).
         max_error_deg (float): Maximum pointing error in degrees. Only used if rso_att_type is "near_velocity".
+        fixed_inspector_state (array-like, optional): A 6-element array [rx, ry, rz, vx, vy, vz] for the 
+            fixed relative state of the inspector(s). If None, the state is randomized.
     """
     persistent_rso_state = {}
 
@@ -39,21 +41,31 @@ def make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity",max_error
             chief_orbit = random_orbit(a=a_meters, e=e)
 
             # 2. Determine RSO Attitude
-            if rso_att_type in ["velocity", "near_velocity"]:
+            if rso_att_type in ["velocity", "near_velocity", "anti_velocity"]:
                 r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
-                # Create the Velocity-Aligned Frame
-                # Unit 1: Prograde (Velocity direction)
-                i_v = v_N / np.linalg.norm(v_N)
                 
-                # Unit 2: Orbit Normal (Cross-track)
+                # Determine Velocity Direction
+                if rso_att_type == "anti_velocity":
+                    i_v = -v_N / np.linalg.norm(v_N)
+                else:  
+                    i_v = v_N / np.linalg.norm(v_N)
+
+                # Orbit Normal (Cross-track)
                 h_vec = np.cross(r_N, v_N)
                 i_n = h_vec / np.linalg.norm(h_vec)
                 
-                # Unit 3: Completes the right-handed set (Radial-ish)
-                i_b = np.cross(i_v, i_n)
+                # --- NEW DCM ASSIGNMENT ---
+                # We want Body Z ([0,0,1]) to point along velocity (i_v)
+                body_z = i_v
+                
+                # We can keep Body Y pointing along the orbit normal (i_n)
+                body_y = i_n
+                
+                # Body X must complete the right-handed set: X = Y cross Z
+                body_x = np.cross(body_y, body_z)
                 
                 # DCM [VN]: Rows are the unit vectors of the V-frame in N-frame
-                dcm_VN = np.array([i_v, i_n, i_b])
+                dcm_VN = np.array([body_x, body_y, body_z])
                 
                 # Apply Perturbation if "near_velocity"
                 if rso_att_type == "near_velocity":
@@ -107,13 +119,19 @@ def make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity",max_error
         args = {}
         
         for inspector in inspectors:
+            # Determine whether to use a fixed state or a randomized state
+            if fixed_inspector_state is not None:
+                deputy_state_func = lambda: np.array(fixed_inspector_state)
+            else:
+                deputy_state_func = lambda: np.concatenate((
+                    random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS), 
+                    random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL)
+                ))
+
             relative_randomizer = relative_to_chief(
                 chief_name="RSO", chief_orbit=chief_orbit,
                 deputy_relative_state={
-                    inspector.name: lambda: np.concatenate((
-                        random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS), 
-                        random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL)
-                    )),
+                    inspector.name: deputy_state_func,
                 },
             )
             args.update(relative_randomizer([rso, inspector]))

@@ -73,7 +73,7 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=120)
+        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=90)
 
         env = ConstellationTasking(
             satellites=[rso, inspector],

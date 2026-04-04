@@ -15,7 +15,7 @@ misalignment_discount_factor=0.8
 max_range_penalty=-10
 
 # Boresight Alignment Reward
-approach_corridor_weight=0.0005
+approach_corridor_weight=0.01
 
 # Time Penalty
 time_penalty_weight=-0.005
