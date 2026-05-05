@@ -1,7 +1,6 @@
 import numpy as np
 
 # Basilisk & BSK-RL imports
-from bsk_rl import data
 from bsk_rl.sim import fsw
 
 # Import custom classes
@@ -9,6 +8,7 @@ from src.rewarders.docking_corridor_rewarder import DockingCorridorReward
 from src.rewarders.quadratic_time_penalty import QuadraticTimePenalty
 from src.rewarders.rel_range_rewarder import RelativeRangeLogReward
 from src.rewarders.target_illumination_rewarder import IlluminationReward
+from src.rewarders.dv_rewarder import DeltaVReward
 
 # Import weights and constants
 from resources import (
@@ -27,9 +27,9 @@ from resources import (
 def get_rewarders():
     """Builds and returns the tuple of rewarders for the RL environment."""
     return (
-        data.ResourceReward(
-            resource_fn=lambda sat: sat.fsw.dv_available if isinstance(sat.fsw, fsw.MagicOrbitalManeuverFSWModel) else 0.0,
-            reward_weight=dv_reward_weight, 
+        DeltaVReward(
+            reward_weight=dv_reward_weight,
+            exponent=2.0 
         ),
         RelativeRangeLogReward(
             alpha=rel_range_log_weight, 

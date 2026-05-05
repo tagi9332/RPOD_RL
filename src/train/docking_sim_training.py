@@ -30,6 +30,9 @@ from utils.observations import (
 # Import custom FSW model for continuous pointing
 from src.fsw_modules.pointing_fsw import RSOInspectorFSWModel
 
+# Import custom action with drift capability
+from src.actions.impulsive_thrust_hill_drift import ImpulsiveThrustHillScaled
+
 # Import custom rewarder function
 from src.rewarders import get_rewarders
 
@@ -122,9 +125,12 @@ class InspectorSat(sats.Satellite):
         obs.Time(norm=SIM_TIME), # Normalize time to episode length
     ]
     action_spec = [
-        act.ImpulsiveThrustHill(
-            chief_name="RSO", max_dv=MAX_DV, max_drift_duration=MAX_DRIFT_DURATION,
-        )
+        ImpulsiveThrustHillScaled(
+            chief_name="RSO",
+            trained_max_dv=MAX_DV,
+            new_max_dv=0.8*MAX_DV, # Scale down the physical thrust limit to encourage more efficient maneuvers
+            max_drift_duration=MAX_DRIFT_DURATION
+        ),
     ]
     dyn_type = types.new_class("Dyn", (dyn.MaxRangeDynModel, dyn.ConjunctionDynModel, dyn.RSOInspectorDynModel))
     # fsw_type = types.new_class("FSW", (fsw.SteeringFSWModel, fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))

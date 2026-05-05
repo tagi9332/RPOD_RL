@@ -1,3 +1,11 @@
+"""
+Multi-process training script for the RPO docking simulation using Stable Baselines3's PPO algorithm.
+
+For monitoring via TensorBoard, run the following command in the terminal:
+tensorboard --logdir ./ppo_tensorboard/
+
+"""
+
 # Standard libraries
 from datetime import datetime
 import os
@@ -42,7 +50,7 @@ from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_
 from src.rewarders import get_rewarders
 
 # Import weight scheduler
-from src.weight_scheduler import CurriculumPenalty
+from src.rewarders.weight_scheduler import CurriculumPenalty
 
 # Import weights
 from resources import (
@@ -120,7 +128,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\rpo_90deg_attitude.zip"
+    LOAD_PATH = r"models\rpo_90deg_attitude_error.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):

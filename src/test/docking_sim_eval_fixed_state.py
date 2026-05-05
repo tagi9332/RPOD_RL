@@ -199,7 +199,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="velocity", fixed_inspector_state=fixed_inspector_state), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="test", rso_att_type="velocity", fixed_inspector_state=fixed_inspector_state), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 

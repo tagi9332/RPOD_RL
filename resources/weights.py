@@ -1,5 +1,6 @@
 # ResourceReward
-dv_reward_weight=0.0001
+dv_reward_weight=-0.01
+dv_constant_penalty=0
 
 # RelativeRangeLogReward
 rel_range_log_weight=-0.0003
@@ -18,7 +19,8 @@ max_range_penalty=-10
 approach_corridor_weight=0.01
 
 # Time Penalty
-time_penalty_weight=-0.005
+# time_penalty_weight=-0.005
+time_penalty_weight=0
 
 # Conjunction Penalty
 conjunction_penalty=-2

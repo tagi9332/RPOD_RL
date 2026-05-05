@@ -306,7 +306,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\rpo_90deg_attitude_error.zip"
+    model_path = r"models\training_run_2026-05-05_12-31-06\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  

@@ -42,7 +42,7 @@ from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_
 from src.rewarders import get_rewarders
 
 # Import weight scheduler
-from src.weight_scheduler import CurriculumPenalty
+from src.rewarders.weight_scheduler import CurriculumPenalty
 
 # Import weights
 from resources import (

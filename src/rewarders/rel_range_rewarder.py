@@ -10,7 +10,8 @@ from bsk_rl.utils.orbital import cd2hill
 from resources import (
     final_docking_distance,
     approach_velocity_weight,
-    rel_range_log_weight
+    rel_range_log_weight,
+    docking_phase_range_threshold
 )
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,8 @@ class RelativeRangeLogReward(GlobalReward):
         # New parameters for docking precision
         self.final_docking_distance = final_docking_distance
         self.velocity_weight = velocity_weight
-        
+        self.docking_phase_range_threshold = docking_phase_range_threshold
+
         if delta_x_max is None:
             self.delta_x_max = np.array([1000.0, 1000.0, 1000.0, 20.0, 20.0, 20.0])
         else:
@@ -105,9 +107,14 @@ class RelativeRangeLogReward(GlobalReward):
                     # Normalize the state
                     normalized = state / self.delta_x_max
 
-                    # Check relative distance and accentuate velocity if necessary
+                    # Check relative distance and tune velocity appropriately
                     distance = np.linalg.norm(state[:3])
-                    if distance < self.final_docking_distance:
+                    
+                    if distance > self.docking_phase_range_threshold:
+                        # If we're outside the docking phase threshold, we can apply the velocity weight
+                        normalized[3:] = 0.0  # Don't penalize velocity during approach phase
+
+                    elif distance < self.final_docking_distance:
                         # Multiply the velocity components (indices 3, 4, 5) by the weight
                         normalized[3:] *= self.velocity_weight
 
