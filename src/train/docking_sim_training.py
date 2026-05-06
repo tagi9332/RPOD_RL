@@ -44,6 +44,7 @@ from resources import (
     docking_reward,
     max_range_penalty,
     conjunction_penalty,
+    time_penalty_weight,
     R_EARTH,
     learning_rate,
     entropy_coeff,
@@ -130,6 +131,9 @@ class Sb3BksEnv(gym.Env):
         # Track scheduled parameters
         self.scheduled_conjunction_radius = inspector_sat_args.get("conjunction_radius", 30)
 
+        # Time penalty state
+        self.prev_sim_time = 0.0
+
     def set_scheduled_parameters(self, conjunction_radius=None):
         if conjunction_radius is not None:
             self.scheduled_conjunction_radius = conjunction_radius
@@ -144,6 +148,7 @@ class Sb3BksEnv(gym.Env):
         # Ensure the scheduled parameters are set at the start of each episode
         self.set_scheduled_parameters(conjunction_radius=self.scheduled_conjunction_radius)
 
+        self.prev_sim_time = 0.0
         return obs_dict[self.agent_name], info
 
     def step(self, action):
@@ -222,6 +227,15 @@ class Sb3BksEnv(gym.Env):
             reward_dict[self.agent_name] += max_range_penalty  # Large negative reward for max range violation
         else:
             info["max_range_violation"] = False
+
+        # Quadratic-rate time penalty: rate = w*(t/T)^2, integrated over the drift window.
+        # Per-step integral: -w*(t_now^3 - t_prev^3) / (3*T^2)
+        # This is negligible early and costly only near the end, discouraging 10800s corridor coasting.
+        t_now = self.env.simulator.sim_time
+        if time_penalty_weight > 0 and t_now > self.prev_sim_time:
+            time_penalty = -time_penalty_weight * (t_now**3 - self.prev_sim_time**3) / (3.0 * SIM_TIME**2)
+            reward_dict[self.agent_name] += time_penalty
+        self.prev_sim_time = t_now
 
         info["metrics"] = {
             "rso_r_N": rso_r_N,

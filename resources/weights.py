@@ -18,9 +18,9 @@ max_range_penalty=-10
 # Boresight Alignment Reward
 approach_corridor_weight=0.01
 
-# Time Penalty
-# time_penalty_weight=-0.005
-time_penalty_weight=0
+# Time Penalty (quadratic-rate integral form: -w*(t^3-t_prev^3)/(3*T^2))
+# w=0.02 gives: full-coast penalty=-72 (net=55-72=-17), dock@1000s penalty=-0.06 (net=9.94)
+time_penalty_weight=0.015
 
 # Conjunction Penalty
 conjunction_penalty=-2

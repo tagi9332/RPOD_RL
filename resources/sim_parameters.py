@@ -7,7 +7,7 @@ SIM_TIME = 10800  # seconds (3 hours)
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 0.1  # m/s
+MAX_DV = 0.05  # m/s
 MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 
 # Relative State Initialization Bounds
@@ -15,20 +15,20 @@ MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 # MIN_REL_POS = 1500     # meters
 # MAX_REL_VEL = 0.01    # m/s
 # MIN_REL_VEL = 0.0      # m/s
-MAX_REL_POS = 210  # meters
-MIN_REL_POS = 205     # meters
+MAX_REL_POS = 2000  # meters
+MIN_REL_POS = 1500     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 
 # Conjunction Radius for Docking success
-CONJUNCTION_RADIUS = 175.0  # meters
+CONJUNCTION_RADIUS = 20  # meters
 
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)
 # approach_corridor_angle_deg=15
 # final_corridor_angle_deg=5
-approach_corridor_angle_deg=360
-final_corridor_angle_deg=360
+approach_corridor_angle_deg=90
+final_corridor_angle_deg=90
 
 # Phase Transition Parameters
 docking_phase_range_threshold=100
