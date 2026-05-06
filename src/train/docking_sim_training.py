@@ -24,6 +24,8 @@ from stable_baselines3.common.monitor import Monitor
 from utils.observations import (
     custom_sigma_DC,
     custom_r_DC_C,
+    custom_v_DC_C,
+    make_dist_to_waypoint_fn,
 )
 
 # Import custom FSW model for continuous pointing
@@ -55,9 +57,17 @@ from resources import (
     SIM_DT,
     MAX_DV,
     MAX_DRIFT_DURATION,
+    MAX_REL_POS,
     rso_sat_args,
     inspector_sat_args,
+    STANDOFF_DISTANCE,
+    docking_port_boresight,
+    approach_corridor_angle_deg,
 )
+
+# Import rewarder types for isinstance checks in Sb3BksEnv
+from src.rewarders.sparse_event_rewarder import SparseEventReward
+from src.rewarders.docking_corridor_rewarder import DockingCorridorReward
 
 # --- CLASS DEFINITIONS ---
 
@@ -88,19 +98,23 @@ def sun_hat_chief(self, other):
 
 class InspectorSat(sats.Satellite):
     observation_spec = [
-        # Full observation spec
         obs.SatProperties(
             dict(prop="dv_available", norm=50),
         ),
         obs.ResourceRewardWeight(),
         obs.RelativeProperties(
+            # Hill-frame state — global navigation context
             dict(prop="r_DC_Hc", norm=500),
-            dict(prop="v_DC_Hc", norm=5), 
-            dict(prop="r_DC_C", fn=custom_r_DC_C, norm=500),
-            dict(prop="sun_hat_Hc", fn=sun_hat_chief),
+            dict(prop="v_DC_Hc", norm=5),
+            # Body-frame state — docking alignment context
+            dict(prop="r_DC_C",          fn=custom_r_DC_C, norm=500),
+            dict(prop="v_DC_C",          fn=custom_v_DC_C, norm=1.0),
+            # Phase indicator: distance to the 30 m standoff waypoint (≈0 when captured)
+            dict(prop="dist_to_waypoint", fn=make_dist_to_waypoint_fn(STANDOFF_DISTANCE, docking_port_boresight), norm=MAX_REL_POS),
+            dict(prop="sun_hat_Hc",      fn=sun_hat_chief),
             chief_name="RSO",
         ),
-        obs.Time(norm=SIM_TIME), # Normalize time to episode length
+        obs.Time(norm=SIM_TIME),
     ]
     action_spec = [
         ImpulsiveThrustHill(
@@ -114,29 +128,61 @@ class InspectorSat(sats.Satellite):
 
 
 class Sb3BksEnv(gym.Env):
-    def __init__(self, env, agent_name="Inspector"):
+    def __init__(self, env, agent_name="Inspector", randomizer=None):
         self.env = env
         self.agent_name = agent_name
         self.observation_space = env.observation_space(agent_name)
         self.action_space = env.action_space(agent_name)
+        self.randomizer = randomizer
 
-        # Track scheduled parameters
+        # Scheduled parameters — updated by curriculum callbacks via set_attr
         self.scheduled_conjunction_radius = inspector_sat_args.get("conjunction_radius", 30)
+        self.scheduled_corridor_angle_deg = approach_corridor_angle_deg
+        self.scheduled_max_error_deg: float | None = None  # None → no override
 
-    def set_scheduled_parameters(self, conjunction_radius=None):
+        # Cache references to schedulable rewarders
+        self._sparse_event_rewarder: SparseEventReward | None = None
+        self._corridor_rewarder: DockingCorridorReward | None = None
+        rewarder_seq = getattr(env, "rewarder", ()) or ()
+        if not hasattr(rewarder_seq, "__iter__"):
+            rewarder_seq = (rewarder_seq,)
+        for r in rewarder_seq:
+            if isinstance(r, SparseEventReward):
+                self._sparse_event_rewarder = r
+            elif isinstance(r, DockingCorridorReward):
+                self._corridor_rewarder = r
+
+    def set_scheduled_parameters(
+        self,
+        conjunction_radius=None,
+        corridor_angle_deg=None,
+        max_error_deg=None,
+    ):
         if conjunction_radius is not None:
             self.scheduled_conjunction_radius = conjunction_radius
             for sat in self.env.satellites:
                 if sat.name == "Inspector":
                     sat.sat_args["conjunction_radius"] = conjunction_radius
-                    sat.logger.info(f"Updated conjunction radius to {conjunction_radius} at sim time {self.env.simulator.sim_time:.2f}s")
+
+        if corridor_angle_deg is not None:
+            self.scheduled_corridor_angle_deg = corridor_angle_deg
+            if self._sparse_event_rewarder is not None:
+                self._sparse_event_rewarder.corridor_angle_deg = corridor_angle_deg
+            if self._corridor_rewarder is not None:
+                self._corridor_rewarder.corridor_angle_deg = corridor_angle_deg
+
+        if max_error_deg is not None:
+            self.scheduled_max_error_deg = max_error_deg
+            if self.randomizer is not None:
+                self.randomizer.max_error_deg = max_error_deg
 
     def reset(self, **kwargs):
         obs_dict, info = self.env.reset(**kwargs)
-
-        # Ensure the scheduled parameters are set at the start of each episode
-        self.set_scheduled_parameters(conjunction_radius=self.scheduled_conjunction_radius)
-
+        self.set_scheduled_parameters(
+            conjunction_radius=self.scheduled_conjunction_radius,
+            corridor_angle_deg=self.scheduled_corridor_angle_deg,
+            max_error_deg=self.scheduled_max_error_deg,
+        )
         return obs_dict[self.agent_name], info
 
     def step(self, action):

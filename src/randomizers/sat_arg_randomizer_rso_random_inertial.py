@@ -1,144 +1,130 @@
 import numpy as np
 
-# Basilisk core
 from Basilisk.utilities.orbitalMotion import elem2rv
 from Basilisk.utilities.RigidBodyKinematics import C2MRP
-
-# BSK-RL framework
 from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief
 
-# Import constants and sim parameters
-from resources import (
-    R_EARTH,
-    MIN_REL_POS,
-    MAX_REL_POS,
-    MIN_REL_VEL,
-    MAX_REL_VEL
-)
+from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL
 
-# Standard Earth gravitational parameter in m^3/s^2
-MU_EARTH = 3.986004418e14 
+MU_EARTH = 3.986004418e14  # m^3/s^2
 
-def make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=5, fixed_inspector_state=None):
+
+class SatArgRandomizer:
     """
-    Args:
-        mode (str): "train" (randomize every reset) or "test" (persist RSO).
-        rso_att_type (str): "random" (inertial), "velocity" (prograde), "anti_velocity" (retrograde), or "near_velocity" (perturbed prograde).
-        max_error_deg (float): Maximum pointing error in degrees. Only used if rso_att_type is "near_velocity".
-        fixed_inspector_state (array-like, optional): A 6-element array [rx, ry, rz, vx, vy, vz] for the 
-            fixed relative state of the inspector(s). If None, the state is randomized.
-    """
-    persistent_rso_state = {}
+    Randomises RSO orbit and attitude and inspector relative state each episode.
 
-    def sat_arg_randomizer(satellites):
-        nonlocal persistent_rso_state
-        generate_new_rso = (mode == "train") or (not persistent_rso_state)
+    Attributes:
+        mode:                 "train" (re-randomise every reset) or "test" (persist RSO).
+        rso_att_type:         "random" | "velocity" | "anti_velocity" | "near_velocity".
+        max_error_deg:        Maximum pointing error for "near_velocity" mode.
+                              Mutable — updated by AttitudeErrorScheduler during training.
+        fixed_inspector_state: Optional 6-element [rx,ry,rz,vx,vy,vz] in Hill frame.
+    """
+
+    def __init__(
+        self,
+        mode: str = "train",
+        rso_att_type: str = "near_velocity",
+        max_error_deg: float = 5.0,
+        fixed_inspector_state=None,
+    ):
+        self.mode = mode
+        self.rso_att_type = rso_att_type
+        self.max_error_deg = max_error_deg
+        self.fixed_inspector_state = fixed_inspector_state
+        self._persistent_rso_state: dict = {}
+
+    def __call__(self, satellites):
+        generate_new_rso = (self.mode == "train") or (not self._persistent_rso_state)
 
         if generate_new_rso:
-            # 1. Generate Chief Orbit (in meters)
-            a_meters = (R_EARTH*1000) + np.random.uniform(35776.0*1000, 35796.0*1000)
+            a_meters = (R_EARTH * 1000) + np.random.uniform(35776.0 * 1000, 35796.0 * 1000)
             e = np.random.uniform(0.0, 0.0005)
             chief_orbit = random_orbit(a=a_meters, e=e)
 
-            # 2. Determine RSO Attitude
-            if rso_att_type in ["velocity", "near_velocity", "anti_velocity"]:
+            if self.rso_att_type in ["velocity", "near_velocity", "anti_velocity"]:
                 r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
-                
-                # Determine Velocity Direction
-                if rso_att_type == "anti_velocity":
-                    i_v = -v_N / np.linalg.norm(v_N)
-                else:  
-                    i_v = v_N / np.linalg.norm(v_N)
 
-                # Orbit Normal (Cross-track)
+                i_v = (-v_N if self.rso_att_type == "anti_velocity" else v_N)
+                i_v = i_v / np.linalg.norm(i_v)
+
                 h_vec = np.cross(r_N, v_N)
                 i_n = h_vec / np.linalg.norm(h_vec)
-                
-                # --- NEW DCM ASSIGNMENT ---
-                # We want Body Z ([0,0,1]) to point along velocity (i_v)
+
                 body_z = i_v
-                
-                # We can keep Body Y pointing along the orbit normal (i_n)
                 body_y = i_n
-                
-                # Body X must complete the right-handed set: X = Y cross Z
                 body_x = np.cross(body_y, body_z)
-                
-                # DCM [VN]: Rows are the unit vectors of the V-frame in N-frame
                 dcm_VN = np.array([body_x, body_y, body_z])
-                
-                # Apply Perturbation if "near_velocity"
-                if rso_att_type == "near_velocity":
-                    # 5% pointing error (approx 0.05 radians or ~2.86 degrees)
-                    max_error_rad = np.radians(max_error_deg)
+
+                if self.rso_att_type == "near_velocity":
+                    max_error_rad = np.radians(self.max_error_deg)
                     angle = np.random.uniform(0, max_error_rad)
-                    
-                    # Generate a random axis of rotation
                     axis = random_unit_vector()
-                    
-                    # Build Skew-Symmetric matrix K for the axis
                     K = np.array([
                         [0, -axis[2], axis[1]],
                         [axis[2], 0, -axis[0]],
-                        [-axis[1], axis[0], 0]
+                        [-axis[1], axis[0], 0],
                     ])
-                    
-                    # Rodrigues' rotation formula to create the error DCM
-                    dcm_err = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
-                    
-                    # Apply the error rotation to the base V-bar DCM
-                    dcm_VN = np.dot(dcm_err, dcm_VN)
-                
-                # Convert final DCM to MRP
+                    dcm_err = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
+                    dcm_VN = dcm_err @ dcm_VN
+
                 sigma_init = C2MRP(dcm_VN)
-            
-            else: # "random"
+
+            else:  # "random" — uniformly distributed orientation
                 u = np.random.uniform(0, 1, 3)
                 q0 = np.sqrt(1 - u[0]) * np.sin(2 * np.pi * u[1])
                 q1 = np.sqrt(1 - u[0]) * np.cos(2 * np.pi * u[1])
                 q2 = np.sqrt(u[0]) * np.sin(2 * np.pi * u[2])
                 q3 = np.sqrt(u[0]) * np.cos(2 * np.pi * u[2])
-                
                 sigma_init = np.array([q1, q2, q3]) / (1 + q0)
                 if np.linalg.norm(sigma_init) > 1:
-                    sigma_init = -sigma_init / (np.linalg.norm(sigma_init)**2)
+                    sigma_init = -sigma_init / (np.linalg.norm(sigma_init) ** 2)
 
-            persistent_rso_state = {
+            self._persistent_rso_state = {
                 "chief_orbit": chief_orbit,
                 "sigma_init": sigma_init,
-                "omega_init": np.array([0.0, 0.0, 0.0])
+                "omega_init": np.zeros(3),
             }
 
-        # --- Retrieval and Assignment ---
-        chief_orbit = persistent_rso_state["chief_orbit"]
-        sigma_init = persistent_rso_state["sigma_init"]
-        omega_init = persistent_rso_state["omega_init"]
+        chief_orbit = self._persistent_rso_state["chief_orbit"]
+        sigma_init = self._persistent_rso_state["sigma_init"]
+        omega_init = self._persistent_rso_state["omega_init"]
 
-        inspectors = [sat for sat in satellites if "Inspector" in sat.name]
-        rso = [s for s in satellites if s.name == "RSO"][0]
+        rso = next(s for s in satellites if s.name == "RSO")
+        inspectors = [s for s in satellites if "Inspector" in s.name]
         args = {}
-        
+
         for inspector in inspectors:
-            # Determine whether to use a fixed state or a randomized state
-            if fixed_inspector_state is not None:
-                deputy_state_func = lambda: np.array(fixed_inspector_state)
+            if self.fixed_inspector_state is not None:
+                deputy_state_func = lambda: np.array(self.fixed_inspector_state)
             else:
                 deputy_state_func = lambda: np.concatenate((
-                    random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS), 
-                    random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL)
+                    random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS),
+                    random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL),
                 ))
 
             relative_randomizer = relative_to_chief(
-                chief_name="RSO", chief_orbit=chief_orbit,
-                deputy_relative_state={
-                    inspector.name: deputy_state_func,
-                },
+                chief_name="RSO",
+                chief_orbit=chief_orbit,
+                deputy_relative_state={inspector.name: deputy_state_func},
             )
             args.update(relative_randomizer([rso, inspector]))
-        
+
         args[rso]["sigma_init"] = sigma_init
         args[rso]["omega_init"] = omega_init
-        
         return args
 
-    return sat_arg_randomizer
+
+def make_sat_arg_randomizer(
+    mode: str = "train",
+    rso_att_type: str = "near_velocity",
+    max_error_deg: float = 5.0,
+    fixed_inspector_state=None,
+) -> SatArgRandomizer:
+    """Factory — returns a SatArgRandomizer instance (callable, mutable)."""
+    return SatArgRandomizer(
+        mode=mode,
+        rso_att_type=rso_att_type,
+        max_error_deg=max_error_deg,
+        fixed_inspector_state=fixed_inspector_state,
+    )

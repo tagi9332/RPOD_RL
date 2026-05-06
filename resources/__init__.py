@@ -10,8 +10,12 @@ from .weights import (
     conjunction_penalty,
     time_penalty_weight,
     illumination_weight,
-    approach_velocity_weight
-
+    approach_velocity_weight,
+    waypoint_pos_weight,
+    waypoint_sparse_reward,
+    vel_weight_phase0,
+    vel_onset_range,
+    vel_weight_phase1,
 )
 from .hyperparameters import (
     learning_rate,
@@ -38,5 +42,8 @@ from .sim_parameters import (
     sun_illumination_cone_angle_deg,
     illumination_cutoff_range,
     final_docking_distance,
-    final_corridor_angle_deg
+    final_corridor_angle_deg,
+    STANDOFF_DISTANCE,
+    WAYPOINT_CAPTURE_RADIUS,
+    VEL_NORM,
 )

@@ -2,5 +2,6 @@ from src.rewarders.rel_range_rewarder import RelativeRangeLogReward, RelativeRan
 from src.rewarders.docking_corridor_rewarder import DockingCorridorReward, DockingCorridorDataStore, DockingCorridorData
 from src.rewarders.quadratic_time_penalty import QuadraticTimePenalty, TimeDataStore, TimeData
 from src.rewarders.sparse_event_rewarder import SparseEventReward, SparseEventDataStore, SparseEventData
+from src.rewarders.waypoint_phase_rewarder import WaypointPhaseReward, WaypointPhaseDataStore, WaypointPhaseData
 
 from src.rewarders.rewarders import get_rewarders

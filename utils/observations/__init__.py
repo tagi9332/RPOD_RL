@@ -1,2 +1,2 @@
 from utils.observations.relative_attitude_obs import custom_sigma_DC
-from utils.observations.relative_state_obs import custom_r_DC_C
+from utils.observations.relative_state_obs import custom_r_DC_C, custom_v_DC_C, make_dist_to_waypoint_fn

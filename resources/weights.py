@@ -28,3 +28,15 @@ conjunction_penalty=-2
 
 # Illumination Reward
 illumination_weight=0.0025
+
+# WaypointPhaseReward
+# Same log-MSE formulation as RelativeRangeLogReward; replaces it entirely.
+waypoint_pos_weight = -0.0003       # log-MSE alpha (same magnitude as rel_range_log_weight)
+waypoint_sparse_reward = 5.0        # one-time bonus when agent first reaches the 30m standoff
+# Phase 0 (approach to waypoint): velocity penalty scales with proximity to waypoint.
+# vel_weight_phase0 multiplies the normalised velocity inside the MSE.
+# Braking curve is zero 100 m+ from waypoint, ramps to full at the waypoint.
+vel_weight_phase0 = 1.0             # loose — agent can sprint early, must slow near waypoint
+vel_onset_range = 100.0             # m — distance at which Phase 0 braking starts
+# Phase 1 (final approach): always-on, stronger weight enforces controlled ingress.
+vel_weight_phase1 = 5.0             # firm — same as legacy approach_velocity_weight

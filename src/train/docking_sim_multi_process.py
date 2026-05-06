@@ -31,8 +31,8 @@ from Basilisk.architecture import bskLogging
 from bsk_rl import scene, data, ConstellationTasking
 from bsk_rl.sim import fsw
 
-# Import custom callbacks
-from src.conjunction_radius_scheduler import ConjunctionRadiusScheduler
+# Import curriculum schedulers
+from src.curriculum import ConjunctionRadiusScheduler, CorridorAngleScheduler, AttitudeErrorScheduler
 
 # Base training script imports
 from src.train import (
@@ -81,7 +81,7 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="velocity")
+        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity")
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -90,10 +90,10 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
             rewarder=rewarders,
             time_limit=SIM_TIME,
             sim_rate=SIM_DT,
-            log_level="ERROR", 
+            log_level="ERROR",
         )
 
-        env_sb3 = Sb3BksEnv(env)
+        env_sb3 = Sb3BksEnv(env, randomizer=randomizer)
         env_sb3 = Monitor(env_sb3)
         env_sb3 = FlattenObservation(env_sb3)
         
@@ -127,8 +127,8 @@ if __name__ == "__main__":
 
     # ------------------------- Model Initialization -------------------------
     # Initialize model
-    LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-06_14-33-42\rpo_min_dv_spec.zip"
+    LOAD_MODEL = False  # Set to False to train from scratch, True to load existing model
+    LOAD_PATH = r"models\training_run_2026-05-06_15-32-06\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -177,25 +177,30 @@ if __name__ == "__main__":
         name_prefix="ppo_inspector_multicore_checkpoint"
     )
 
-    # 2. Build the callback list dynamically
+    # 2. Curriculum scheduler config — set to None to disable a scheduler
+    # -------------------------------------------------------------------------
+    CONJ_RADIUS_SCHEDULE:   tuple[float, float] | None = (200,30)   # e.g. (200, 10) → m
+    CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None  # e.g. (360, 30) → °
+    ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = None  # e.g. (90, 5)  → °
+    # -------------------------------------------------------------------------
+
     active_callbacks = [eval_callback, time_callback, checkpoint_callback]
 
-    # 3. Handle the toggleable Conjunction Radius Scheduler
-    USE_CONJ_RADIUS_SCHEDULER = False
-    
-    if USE_CONJ_RADIUS_SCHEDULER:
-        initial_radius = 200
-        final_radius = 50.0
-        conj_radius_scheduler = ConjunctionRadiusScheduler(
-            initial_radius=initial_radius, 
-            final_radius=final_radius
-        )
-        active_callbacks.append(conj_radius_scheduler) # Only add if True
-        print(f"Using Conjunction Radius Scheduler: {initial_radius} -> {final_radius}")
-    else:
-        print("Using constant Conjunction Radius (Scheduler disabled).")
+    if CONJ_RADIUS_SCHEDULE is not None:
+        i, f = CONJ_RADIUS_SCHEDULE
+        active_callbacks.append(ConjunctionRadiusScheduler(i, f))
+        print(f"ConjunctionRadiusScheduler: {i} → {f} m")
 
-    # 4. Finalize the list for the model
+    if CORRIDOR_ANGLE_SCHEDULE is not None:
+        i, f = CORRIDOR_ANGLE_SCHEDULE
+        active_callbacks.append(CorridorAngleScheduler(i, f))
+        print(f"CorridorAngleScheduler: {i} → {f} °")
+
+    if ATTITUDE_ERROR_SCHEDULE is not None:
+        i, f = ATTITUDE_ERROR_SCHEDULE
+        active_callbacks.append(AttitudeErrorScheduler(i, f))
+        print(f"AttitudeErrorScheduler: {i} → {f} °")
+
     callbacks = CallbackList(active_callbacks)
 
     model.set_logger(custom_logger)

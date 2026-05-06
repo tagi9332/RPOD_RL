@@ -73,8 +73,17 @@ class DockingCorridorReward(GlobalReward):
         super().__init__()
         self.weight = weight
         self.docking_port_boresight = np.array(docking_port_boresight) / np.linalg.norm(docking_port_boresight)
-        self.cos_limit = np.cos(np.radians(corridor_angle_deg))
+        self.corridor_angle_deg = corridor_angle_deg  # property; setter keeps cos_limit in sync
         self.cutoff_range = cutoff_range
+
+    @property
+    def corridor_angle_deg(self) -> float:
+        return self._corridor_angle_deg
+
+    @corridor_angle_deg.setter
+    def corridor_angle_deg(self, value: float) -> None:
+        self._corridor_angle_deg = float(value)
+        self.cos_limit = np.cos(np.radians(self._corridor_angle_deg))
 
     def calculate_reward(self, new_data_dict: Mapping[str, Data]) -> dict[str, float]:
         reward = {}

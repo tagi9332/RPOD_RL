@@ -102,6 +102,10 @@ class SparseEventReward(GlobalReward):
     """
     data_store_type = SparseEventDataStore
 
+    def __init__(self, corridor_angle_deg: float = approach_corridor_angle_deg):
+        super().__init__()
+        self.corridor_angle_deg = corridor_angle_deg
+
     def calculate_reward(self, new_data_dict: Mapping[str, Data]) -> dict[str, float]:
         rewards: dict[str, float] = {}
         for sat_id, data in new_data_dict.items():
@@ -112,9 +116,9 @@ class SparseEventReward(GlobalReward):
             r = 0.0
             if data.conjunction_angle_deg is not None:
                 angle = data.conjunction_angle_deg
-                if angle <= approach_corridor_angle_deg:
+                if angle <= self.corridor_angle_deg:
                     max_penalty_fraction = 1.0 - misalignment_discount_factor
-                    alignment_mult = 1.0 - max_penalty_fraction * (angle / approach_corridor_angle_deg)
+                    alignment_mult = 1.0 - max_penalty_fraction * (angle / max(self.corridor_angle_deg, 1e-6))
                     r += docking_reward * alignment_mult
                     logger.info(f"DOCKING: angle={angle:.1f}° reward={docking_reward * alignment_mult:.2f}")
                 else:
