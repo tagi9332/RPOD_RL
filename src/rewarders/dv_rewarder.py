@@ -74,8 +74,8 @@ class DeltaVReward(GlobalReward):
                 # Absolute value of the dV change
                 dv_magnitude = abs(data.resource_accumulated)
                 if dv_magnitude > 1e-6:
-                    # penalties[sat_name] = self.reward_weight * (dv_magnitude ** self.exponent) # Quadratic penalty
-                    penalties[sat_name] = dv_constant_penalty + (dv_magnitude*dv_reward_weight) # Linear penalty with constant offset
+                    penalties[sat_name] = self.reward_weight * (dv_magnitude ** self.exponent) # Quadratic penalty
+                    # penalties[sat_name] = dv_constant_penalty + (dv_magnitude*dv_reward_weight) # Linear penalty with constant offset
             else:
                 penalties[sat_name] = 0.0
         return penalties

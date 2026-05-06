@@ -31,7 +31,7 @@ from utils.observations import (
 from src.fsw_modules.pointing_fsw import RSOInspectorFSWModel
 
 # Import custom action with drift capability
-from src.actions.impulsive_thrust_hill_drift import ImpulsiveThrustHillScaled
+from src.actions.impulsive_thrust_hill import ImpulsiveThrustHill
 
 # Import custom rewarder function
 from src.rewarders import get_rewarders
@@ -94,24 +94,10 @@ def sun_hat_chief(self, other):
     return HN @ r_SB_N_hat
 
 class InspectorSat(sats.Satellite):
-    # observation_spec = [
-    #     # Trimmed observation spec
-    #     obs.SatProperties(
-    #         dict(prop="dv_available", norm=50),
-    #     ),
-    #     obs.ResourceRewardWeight(),
-    #     obs.RelativeProperties(
-    #         dict(prop="r_DC_Hc", norm=500), 
-    #         dict(prop="v_DC_Hc", norm=5), 
-    #         chief_name="RSO",
-    #     ),
-    # ]
     observation_spec = [
         # Full observation spec
         obs.SatProperties(
             dict(prop="dv_available", norm=50),
-            # dict(prop="eccentricity", norm=0.1),
-            # dict(prop="semi_major_axis", norm=35786.0*1000),
         ),
         obs.ResourceRewardWeight(),
         obs.RelativeProperties(
@@ -121,19 +107,16 @@ class InspectorSat(sats.Satellite):
             dict(prop="sun_hat_Hc", fn=sun_hat_chief),
             chief_name="RSO",
         ),
-        # obs.Eclipse(norm=1.0), 
         obs.Time(norm=SIM_TIME), # Normalize time to episode length
     ]
     action_spec = [
-        ImpulsiveThrustHillScaled(
+        ImpulsiveThrustHill(
             chief_name="RSO",
-            trained_max_dv=MAX_DV,
-            new_max_dv=0.8*MAX_DV, # Scale down the physical thrust limit to encourage more efficient maneuvers
+            max_dv=MAX_DV,
             max_drift_duration=MAX_DRIFT_DURATION
         ),
     ]
     dyn_type = types.new_class("Dyn", (dyn.MaxRangeDynModel, dyn.ConjunctionDynModel, dyn.RSOInspectorDynModel))
-    # fsw_type = types.new_class("FSW", (fsw.SteeringFSWModel, fsw.MagicOrbitalManeuverFSWModel, fsw.RSOInspectorFSWModel))
     fsw_type = types.new_class("FSW", (fsw.MagicOrbitalManeuverFSWModel, RSOInspectorFSWModel))
 
 
@@ -325,7 +308,7 @@ if __name__ == "__main__":
     )
 
     # sim_logger = SimulationLoggerCallback(save_freq=50) # Flushes CSV every 50 updates
-    model.learn(total_timesteps=1000, callback=None)
+    model.learn(total_timesteps=100, callback=None)
 
     # Model saving
     output_dir = "./models/"

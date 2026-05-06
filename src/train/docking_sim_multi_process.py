@@ -2,7 +2,7 @@
 Multi-process training script for the RPO docking simulation using Stable Baselines3's PPO algorithm.
 
 For monitoring via TensorBoard, run the following command in the terminal:
-tensorboard --logdir ./ppo_tensorboard/
+tensorboard --logdir="./logs/"
 
 """
 
@@ -81,7 +81,7 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=90)
+        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="velocity")
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 10_000_000 
+    total_timesteps = 1_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0, total_timesteps=total_timesteps, num_cpu=num_cpu, n_steps_per_env=n_steps_per_env) for i in range(num_cpu)])    
@@ -127,8 +127,8 @@ if __name__ == "__main__":
 
     # ------------------------- Model Initialization -------------------------
     # Initialize model
-    LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\rpo_90deg_attitude_error.zip"
+    LOAD_MODEL = False  # Set to False to train from scratch, True to load existing model
+    LOAD_PATH = r"models\training_run_2026-05-06_09-57-13\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -184,8 +184,8 @@ if __name__ == "__main__":
     USE_CONJ_RADIUS_SCHEDULER = False
     
     if USE_CONJ_RADIUS_SCHEDULER:
-        initial_radius = 30.0
-        final_radius = 10.0
+        initial_radius = 200
+        final_radius = 50.0
         conj_radius_scheduler = ConjunctionRadiusScheduler(
             initial_radius=initial_radius, 
             final_radius=final_radius

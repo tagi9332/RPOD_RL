@@ -1,25 +1,34 @@
 import numpy as np
 
 # Simulation Time Limit
-SIM_TIME = 10800
+SIM_TIME = 10800  # seconds (3 hours)
 
 # Simulation Time Step
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 1  # m/s
-MAX_DRIFT_DURATION = 300 # s
+MAX_DV = 0.1  # m/s
+MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 
 # Relative State Initialization Bounds
-MAX_REL_POS = 2000  # meters
-MIN_REL_POS = 1500     # meters
+# MAX_REL_POS = 2000  # meters
+# MIN_REL_POS = 1500     # meters
+# MAX_REL_VEL = 0.01    # m/s
+# MIN_REL_VEL = 0.0      # m/s
+MAX_REL_POS = 210  # meters
+MIN_REL_POS = 205     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 
+# Conjunction Radius for Docking success
+CONJUNCTION_RADIUS = 175.0  # meters
+
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)
-approach_corridor_angle_deg=15
-final_corridor_angle_deg=5
+# approach_corridor_angle_deg=15
+# final_corridor_angle_deg=5
+approach_corridor_angle_deg=360
+final_corridor_angle_deg=360
 
 # Phase Transition Parameters
 docking_phase_range_threshold=100
@@ -31,7 +40,7 @@ docking_port_boresight = np.array([0.0, 0.0, 1.0])
 
 # Illumination Reward Parameters
 sun_illumination_cone_angle_deg = 45
-illumination_cutoff_range = 100
+illumination_cutoff_range = 150
 
 # --- CONFIGURATION DICTIONARIES ---
 rso_sat_args = dict(
@@ -53,7 +62,7 @@ inspector_sat_args = dict(
     dataStorageCapacity=1e6,
     batteryStorageCapacity=1e12,
     storedCharge_Init=1e12,
-    conjunction_radius=10,
+    conjunction_radius=CONJUNCTION_RADIUS,
     dv_available_init=150,
     max_range_radius=5000,
     chief_name="RSO",

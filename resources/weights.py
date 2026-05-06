@@ -1,5 +1,5 @@
 # ResourceReward
-dv_reward_weight=-0.01
+dv_reward_weight=-0.05
 dv_constant_penalty=0
 
 # RelativeRangeLogReward

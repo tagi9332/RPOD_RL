@@ -76,7 +76,9 @@ class InferenceEnv(Sb3BksEnv):
     def step(self, action):
         # 1. Run normal training step logic
         obs, reward, terminated, truncated, info = super().step(action)
-        self.current_sim_time += self.sim_rate
+        # Read directly from the Basilisk clock — each RL step advances by dt
+        # seconds (the drift duration), not sim_rate, so we can't just accumulate.
+        self.current_sim_time = self.env.simulator.sim_time
 
         # 2. Extract extra telemetry just for inference plots
         rso = self.env.satellites[0]
@@ -192,7 +194,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="velocity", max_error_deg=90), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="velocity"), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 
@@ -265,7 +267,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
         run_df = pd.DataFrame(run_data_log)
         all_runs_data.append(run_df)
         
-        total_sim_time = len(run_df) * SIM_DT
+        total_sim_time = run_df["sim_time"].max() if "sim_time" in run_df.columns else 0.0
         final_dist = np.linalg.norm([run_df.iloc[-1]["hill_x"], run_df.iloc[-1]["hill_y"], run_df.iloc[-1]["hill_z"]])
         
         # --- NEW SUCCESS LOGIC ---
@@ -279,7 +281,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
             end_status = f"Docked ({final_angle:.1f}°)"
         elif conjunction: 
             end_status = f"Collision ({final_angle:.1f}°)"
-        elif len(run_df) >= (SIM_TIME / SIM_DT) * 0.99: 
+        elif total_sim_time >= SIM_TIME * 0.99:
             end_status = "Timeout"
         else: 
             end_status = "Fuel Exhausted / Bounds Viol."
@@ -306,7 +308,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-05_12-31-06\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-05-06_10-25-46\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
