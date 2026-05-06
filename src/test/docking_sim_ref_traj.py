@@ -308,10 +308,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-06_11-51-56\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-05-06_14-47-13\best_model.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=20)  
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=10)  
 
     if all_runs_data:
         plot_all_trajectories(all_runs_data, summary_df, output_folder)

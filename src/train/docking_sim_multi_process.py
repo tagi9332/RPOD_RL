@@ -128,7 +128,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-06_11-33-06\rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models\training_run_2026-05-06_14-33-42\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):

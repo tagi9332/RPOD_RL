@@ -6,7 +6,6 @@ import os
 
 # Basilisk core
 from Basilisk.architecture import bskLogging
-from Basilisk.utilities import RigidBodyKinematics as rbk
 
 # BSK-RL framework
 from bsk_rl import sats, obs, act, ConstellationTasking, scene
@@ -41,17 +40,10 @@ from src.randomizers.sat_arg_randomizer_rso_random_inertial import make_sat_arg_
 
 # Import weights
 from resources import (
-    docking_reward,
-    max_range_penalty,
-    conjunction_penalty,
-    time_penalty_weight,
-    R_EARTH,
     learning_rate,
     entropy_coeff,
     max_grad_norm,
-    approach_corridor_angle_deg,
     clip_range,
-    misalignment_discount_factor
 )
 
 # Set BSK logging level
@@ -131,9 +123,6 @@ class Sb3BksEnv(gym.Env):
         # Track scheduled parameters
         self.scheduled_conjunction_radius = inspector_sat_args.get("conjunction_radius", 30)
 
-        # Time penalty state
-        self.prev_sim_time = 0.0
-
     def set_scheduled_parameters(self, conjunction_radius=None):
         if conjunction_radius is not None:
             self.scheduled_conjunction_radius = conjunction_radius
@@ -148,13 +137,12 @@ class Sb3BksEnv(gym.Env):
         # Ensure the scheduled parameters are set at the start of each episode
         self.set_scheduled_parameters(conjunction_radius=self.scheduled_conjunction_radius)
 
-        self.prev_sim_time = 0.0
         return obs_dict[self.agent_name], info
 
     def step(self, action):
         obs_dict, reward_dict, terminated_dict, truncated_dict, info = self.env.step({self.agent_name: action})
 
-        # Extract Metrics
+        # --- State extraction (metrics only; all reward math lives in rewarder classes) ---
         rso_sat = self.env.satellites[0]
         inspector_sat = self.env.satellites[1]
 
@@ -162,80 +150,20 @@ class Sb3BksEnv(gym.Env):
         rso_v_N = np.array(rso_sat.dynamics.v_BN_N)
         inspector_r_N = np.array(inspector_sat.dynamics.r_BN_N)
         inspector_v_N = np.array(inspector_sat.dynamics.v_BN_N)
-        
         inspector_sigma_BN = np.array(inspector_sat.dynamics.sigma_BN)
         inspector_omega_BN_B = np.array(inspector_sat.dynamics.omega_BN_B)
 
         hill_state = cd2hill(rso_r_N, rso_v_N, inspector_r_N, inspector_v_N)
         dv_remaining = inspector_sat.fsw.dv_available if hasattr(inspector_sat.fsw, 'dv_available') else 0.0
 
-        # Check conjunction status
-        if hasattr(inspector_sat.dynamics, 'conjunctions') and inspector_sat.dynamics.conjunctions:
+        # Conjunction flag (for info/logging; reward handled by SparseEventReward)
+        if getattr(inspector_sat.dynamics, 'conjunctions', None):
             info["conjunction"] = True
             info["conjunction_with"] = [sat.name for sat in inspector_sat.dynamics.conjunctions]
-            
-            # Get RSO attitude and convert to Direction Cosine Matrix (Inertial -> Body)
-            rso_sigma_BN = np.array(rso_sat.dynamics.sigma_BN)
-            dcm_BN = rbk.MRP2C(rso_sigma_BN) 
-            
-            # Calculate the relative position vector (pointing FROM RSO TO Inspector)
-            r_rel_N = inspector_r_N - rso_r_N 
-            dist = np.linalg.norm(r_rel_N)
-            
-            if dist > 1e-6:
-                # Rotate the normalized relative position into the RSO Body Frame
-                r_rel_N_hat = r_rel_N / dist
-                r_rel_B_hat = np.dot(dcm_BN, r_rel_N_hat)
-                
-                # Define your docking port boresight (assuming Z-axis here)
-                boresight_B = np.array([0.0, 0.0, 1.0]) 
-                
-                # Calculate the angle between the inspector's position and the boresight
-                cos_theta = np.dot(r_rel_B_hat, boresight_B)
-                angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
-                angle_deg = np.degrees(angle_rad)
-                
-                # ====================================================================
-                # --- NEW: SCALED SPARSE REWARD LOGIC ---
-                # ====================================================================
-                if angle_deg <= approach_corridor_angle_deg:
-                    # Determine how much to penalize a sloppy docking. 
-                    # 0.2 means the reward drops to 80% at the extreme edge of the cone.
-                    max_penalty_fraction = 1 - misalignment_discount_factor 
-                    
-                    # Multiplier is 1.0 at 0 degrees, and 0.8 at max corridor angle
-                    alignment_multiplier = 1.0 - max_penalty_fraction * (angle_deg / approach_corridor_angle_deg)
-                    
-                    # Calculate final scaled reward (e.g., 10 * 1.0 = 10, or 10 * 0.8 = 8)
-                    scaled_docking_reward = docking_reward * alignment_multiplier
-                    
-                    reward_dict[self.agent_name] += scaled_docking_reward
-                    inspector_sat.logger.info(f"SUCCESSFUL DOCKING! Angle: {angle_deg:.2f} deg, Reward: {scaled_docking_reward:.2f} at sim time {self.env.simulator.sim_time:.2f}s")
-                else:
-                    # Apply a crash penalty if it hits the wrong side of the RSO
-                    reward_dict[self.agent_name] += conjunction_penalty 
-                    inspector_sat.logger.info(f"FAILED DOCKING (Collision). Angle: {angle_deg:.2f} deg at sim time {self.env.simulator.sim_time:.2f}s")
 
-            inspector_sat.logger.info(f"final episode reward: {reward_dict[self.agent_name]:.4f}")
-
-        # Check max range violation
-        max_range = inspector_sat.sat_args.get("max_range_radius", 10000)
-        rho, rho_d = cd2hill(rso_r_N, rso_v_N, inspector_r_N, inspector_v_N)
-        r_rel_mag = np.linalg.norm(rho)
-        if r_rel_mag > max_range:
-            info["max_range_violation"] = True
-            reward_dict[self.agent_name] += max_range_penalty  # Large negative reward for max range violation
-        else:
-            info["max_range_violation"] = False
-
-        # Quadratic-rate time penalty: rate = w*(t/T)^2, integrated over the drift window.
-        # Per-step integral: -w*(t_now^3 - t_prev^3) / (3*T^2)
-        # This is negligible early and costly only near the end, discouraging 10800s corridor coasting.
-        t_now = self.env.simulator.sim_time
-        if time_penalty_weight > 0 and t_now > self.prev_sim_time:
-            time_penalty = -time_penalty_weight * (t_now**3 - self.prev_sim_time**3) / (3.0 * SIM_TIME**2)
-            reward_dict[self.agent_name] += time_penalty
-        self.prev_sim_time = t_now
+        # Max-range flag (for info/logging; reward handled by SparseEventReward)
+        max_range = inspector_sat.sat_args.get("max_range_radius", 10_000)
+        info["max_range_violation"] = bool(np.linalg.norm(hill_state[0]) > max_range)
 
         info["metrics"] = {
             "rso_r_N": rso_r_N,
@@ -249,7 +177,7 @@ class Sb3BksEnv(gym.Env):
             "reward": reward_dict[self.agent_name],
             "docked_state": info.get("conjunction", False),
             "dV_remaining": dv_remaining,
-            "max_range_violation": info.get("max_range_violation", False)
+            "max_range_violation": info.get("max_range_violation", False),
         }
 
         return obs_dict[self.agent_name], reward_dict[self.agent_name], terminated_dict[self.agent_name], truncated_dict[self.agent_name], info

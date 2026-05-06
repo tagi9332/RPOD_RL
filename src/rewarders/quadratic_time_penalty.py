@@ -1,7 +1,7 @@
-"""Data system for recording simulation time and applying time-based penalties."""
+"""Step-size-independent time penalty via the integral of a polynomial rate."""
 
 import logging
-from typing import Optional, Union, Mapping
+from typing import Mapping
 
 import numpy as np
 from bsk_rl.data.base import Data, DataStore, GlobalReward
@@ -10,89 +10,77 @@ from resources import SIM_TIME
 
 logger = logging.getLogger(__name__)
 
-# 1. The Container
+
 class TimeData(Data):
-    """Container for the current simulation time."""
-    def __init__(self, current_time: Optional[float] = None):
-        self.current_time = current_time if current_time is not None else 0.0
+    """Stores the sim-time window [old_time, new_time] for one RL step."""
+    def __init__(self, old_time: float = 0.0, new_time: float = 0.0):
+        self.old_time = old_time
+        self.new_time = new_time
 
     def __add__(self, other: Data) -> "TimeData":
-        """In this case, addition just takes the most recent time."""
         if isinstance(other, TimeData):
-            return TimeData(current_time=other.current_time)
+            return TimeData(old_time=other.old_time, new_time=other.new_time)
         return self
 
     def __repr__(self) -> str:
-        return f"TimeData(sim_time={self.current_time:.1f}s)"
+        return f"TimeData([{self.old_time:.1f}s → {self.new_time:.1f}s])"
 
 
-# 2. The DataStore
 class TimeDataStore(DataStore):
     data_type = TimeData
 
     def get_log_state(self) -> float:
-        """
-        Pull the current simulation time from the Basilisk simulator.
-        """
-        # Access the simulator's internal clock
-        current_time = self.satellite.simulator.sim_time 
-        return float(current_time)
+        return float(self.satellite.simulator.sim_time)
 
     def compare_log_states(self, old_state: float, new_state: float) -> TimeData:
-        """Pass the new time into the Data container."""
-        return TimeData(current_time=new_state)
+        return TimeData(old_time=old_state, new_time=new_state)
 
 
-# 3. The Rewarder
 class QuadraticTimePenalty(GlobalReward):
     """
-    Applies a time penalty that scales quadratically to prevent loitering.
-    Penalty starts near zero and scales to `max_penalty` at `max_sim_time`.
+    Step-size-independent time penalty.
+
+    The penalty rate is proportional to (t/T)^power, so it is nearly zero
+    early and steep near the episode end.  The per-step contribution is the
+    exact integral of that rate over the drift window [t_prev, t_now]:
+
+        step_penalty = -max_episode_penalty
+                       * (t_now^(n+1) - t_prev^(n+1)) / T^(n+1)
+
+    Summed over a complete episode this equals exactly -max_episode_penalty,
+    regardless of drift step sizes.
+
+    Args:
+        max_episode_penalty: Total penalty accumulated over a full episode [+ve scalar].
+        max_sim_time: Episode length in seconds.
+        power: Rate exponent n (2 = quadratic rate, 3 = cubic rate).
     """
     data_store_type = TimeDataStore
 
     def __init__(
         self,
-        max_penalty: float = -0.005,
+        max_episode_penalty: float = 65.0,
         max_sim_time: float = SIM_TIME,
-        power: float = 2.0
+        power: float = 2.0,
     ):
-        """
-        Args:
-            max_penalty: The maximum negative reward applied at the end of the sim.
-            max_sim_time: The maximum length of the episode in seconds.
-            power: The exponent for scaling (2.0 = quadratic, 3.0 = cubic).
-        """
         super().__init__()
-        # Ensure max_penalty is negative so it always punishes
-        self.max_penalty = -abs(max_penalty) 
+        self.max_episode_penalty = abs(max_episode_penalty)
         self.max_sim_time = float(max_sim_time)
         self.power = float(power)
 
-    def calculate_reward(
-        self, new_data_dict: Mapping[str, Data]
-    ) -> dict[str, float]:
-        """Calculate the polynomial time penalty."""
+    def calculate_reward(self, new_data_dict: Mapping[str, Data]) -> dict[str, float]:
         reward = {}
+        T = self.max_sim_time
+        n = self.power
         for sat_id, data in new_data_dict.items():
             if isinstance(data, TimeData):
-                current_time = data.current_time
-                
-                # Normalize time fraction [0.0 to 1.0]
-                time_fraction = min(current_time / self.max_sim_time, 1.0)
-                
-                # Calculate the polynomial penalty: P(t) = -W_max * (t / T_max)^k
-                # Note: self.max_penalty is already negative
-                step_penalty = self.max_penalty * (time_fraction ** self.power)
-                
+                t0, t1 = data.old_time, data.new_time
+                if t1 > t0 and T > 0:
+                    # Integral of -P * (t/T)^n from t0 to t1
+                    step_penalty = -self.max_episode_penalty * (t1**(n+1) - t0**(n+1)) / (T**(n+1))
+                else:
+                    step_penalty = 0.0
                 reward[sat_id] = float(step_penalty)
-
-                # Debug prints
-                # logger.debug(f"Time Penalty for {sat_id}: time={current_time}s, fraction={time_fraction:.3f}, penalty={step_penalty:.5f}")
-                # print(f"Time Penalty for {sat_id}: time={current_time}s, fraction={time_fraction:.3f}, penalty={step_penalty:.5f}")
-                
             else:
                 reward[sat_id] = 0.0
-                
-        # Filter to apply only to the Inspector
         return {k: v for k, v in reward.items() if "Inspector" in k}
