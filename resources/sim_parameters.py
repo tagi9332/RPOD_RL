@@ -15,13 +15,13 @@ MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 # MIN_REL_POS = 1500     # meters
 # MAX_REL_VEL = 0.01    # m/s
 # MIN_REL_VEL = 0.0      # m/s
-MAX_REL_POS = 200  # meters
-MIN_REL_POS = 199     # meters
+MAX_REL_POS = 2000  # meters
+MIN_REL_POS = 1800     # meters
 MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 
 # Conjunction Radius for Docking success
-CONJUNCTION_RADIUS = 50  # meters
+CONJUNCTION_RADIUS = 5  # meters
 
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)

@@ -5,7 +5,7 @@ from src.rewarders.quadratic_time_penalty import QuadraticTimePenalty
 from src.rewarders.target_illumination_rewarder import IlluminationReward
 from src.rewarders.dv_rewarder import DeltaVReward
 from src.rewarders.sparse_event_rewarder import SparseEventReward
-from src.rewarders.waypoint_phase_rewarder import WaypointPhaseReward
+from src.rewarders.waypoint_phase_rewarder import WaypointGate, WaypointPhaseReward
 
 from resources import (
     dv_reward_weight,
@@ -35,15 +35,19 @@ from resources import (
 # SparseEventReward      |  -2   or  +16…+20   | terminal: dock/coll/range
 # ============================================================
 
+# Set to True to require waypoint capture before the docking bonus is awarded.
+WAYPOINT_GATE_ENABLED = True
+
 
 def get_rewarders():
     """Builds and returns the tuple of rewarders for the RL environment."""
+    gate = WaypointGate() if WAYPOINT_GATE_ENABLED else None
     return (
         DeltaVReward(
             reward_weight=dv_reward_weight,
             exponent=2.0,
         ),
-        WaypointPhaseReward(),
+        WaypointPhaseReward(gate=gate),
         DockingCorridorReward(
             weight=approach_corridor_weight,
             docking_port_boresight=docking_port_boresight,
@@ -59,5 +63,5 @@ def get_rewarders():
             cutoff_range=illumination_cutoff_range,
             cone_angle_deg=sun_illumination_cone_angle_deg,
         ),
-        SparseEventReward(),
+        SparseEventReward(waypoint_gate=gate),
     )

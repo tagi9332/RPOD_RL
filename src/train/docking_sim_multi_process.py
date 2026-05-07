@@ -127,8 +127,8 @@ if __name__ == "__main__":
 
     # ------------------------- Model Initialization -------------------------
     # Initialize model
-    LOAD_MODEL = False  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-06_15-32-06\rpo_min_dv_spec.zip"
+    LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
+    LOAD_PATH = r"models\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -179,8 +179,8 @@ if __name__ == "__main__":
 
     # 2. Curriculum scheduler config — set to None to disable a scheduler
     # -------------------------------------------------------------------------
-    CONJ_RADIUS_SCHEDULE:   tuple[float, float] | None = (200,30)   # e.g. (200, 10) → m
-    CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None  # e.g. (360, 30) → °
+    CONJ_RADIUS_SCHEDULE:   tuple[float, float] | None = None   # e.g. (200, 10) → m
+    CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = (180,5)  # e.g. (360, 30) → °
     ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = None  # e.g. (90, 5)  → °
     # -------------------------------------------------------------------------
 

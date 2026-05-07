@@ -21,6 +21,22 @@ import numpy as np
 from bsk_rl.data.base import Data, DataStore, GlobalReward
 from Basilisk.utilities.RigidBodyKinematics import MRP2C
 
+
+class WaypointGate:
+    """Shared state tracking the current waypoint phase per satellite.
+
+    WaypointPhaseReward writes the phase on every step; SparseEventReward
+    reads it to gate the docking bonus on waypoint capture.
+    """
+    def __init__(self) -> None:
+        self._phase: dict[str, int] = {}
+
+    def update(self, sat_id: str, phase: int) -> None:
+        self._phase[sat_id] = phase
+
+    def waypoint_captured(self, sat_id: str) -> bool:
+        return self._phase.get(sat_id, 0) >= 1
+
 from resources import (
     waypoint_pos_weight,
     waypoint_sparse_reward,
@@ -138,6 +154,10 @@ class WaypointPhaseReward(GlobalReward):
     """
     data_store_type = WaypointPhaseDataStore
 
+    def __init__(self, gate: Optional[WaypointGate] = None) -> None:
+        super().__init__()
+        self.gate = gate
+
     def calculate_reward(self, new_data_dict: Mapping[str, Data]) -> dict[str, float]:
         rewards: dict[str, float] = {}
 
@@ -148,6 +168,9 @@ class WaypointPhaseReward(GlobalReward):
 
             r = data.r_DC_C
             v = data.v_DC_C
+
+            if self.gate is not None:
+                self.gate.update(sat_id, data.phase)
 
             if data.phase == 0:
                 # ----------------------------------------------------------
