@@ -21,13 +21,13 @@ MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 
 # Conjunction Radius for Docking success
-CONJUNCTION_RADIUS = 5  # meters
+CONJUNCTION_RADIUS = 10  # meters
 
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)
 # approach_corridor_angle_deg=15
 # final_corridor_angle_deg=5
-approach_corridor_angle_deg=180 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
+approach_corridor_angle_deg=120 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
 final_corridor_angle_deg=180
 
 # Phase Transition Parameters

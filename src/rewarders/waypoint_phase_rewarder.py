@@ -95,6 +95,10 @@ class WaypointPhaseData(Data):
 class WaypointPhaseDataStore(DataStore):
     data_type = WaypointPhaseData
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._ever_captured: bool = False
+
     def get_log_state(self) -> Optional[Tuple]:
         """Returns (r_DC_C, v_DC_C, dist_to_waypoint, in_capture_sphere) or None for RSO."""
         if "RSO" in self.satellite.name:
@@ -123,13 +127,15 @@ class WaypointPhaseDataStore(DataStore):
         if old_state is None or new_state is None:
             return WaypointPhaseData()
 
-        old_r, old_v, old_d, old_in = old_state
+        _old_r, _old_v, _old_d, _old_in = old_state
         new_r, new_v, new_d, new_in = new_state
 
-        # Phase latches: once inside capture sphere, stays Phase 1
-        old_phase = 1 if old_in else 0
-        new_phase = 1 if (old_in or new_in) else 0
-        is_transition = (old_phase == 0) and (new_phase == 1)
+        # Fires exactly once per episode — when the agent first enters the sphere
+        is_transition = new_in and not self._ever_captured
+        if new_in:
+            self._ever_captured = True
+
+        new_phase = 1 if self._ever_captured else 0
 
         return WaypointPhaseData(
             r_DC_C=new_r,

@@ -108,7 +108,7 @@ class InspectorSat(sats.Satellite):
             dict(prop="v_DC_Hc", norm=5),
             # Body-frame state — docking alignment context
             dict(prop="r_DC_C",          fn=custom_r_DC_C, norm=500),
-            dict(prop="v_DC_C",          fn=custom_v_DC_C, norm=1.0),
+            dict(prop="v_DC_C",          fn=custom_v_DC_C, norm=5.0),
             # Phase indicator: distance to the 30 m standoff waypoint (≈0 when captured)
             dict(prop="dist_to_waypoint", fn=make_dist_to_waypoint_fn(STANDOFF_DISTANCE, docking_port_boresight), norm=MAX_REL_POS),
             dict(prop="sun_hat_Hc",      fn=sun_hat_chief),

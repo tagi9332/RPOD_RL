@@ -36,7 +36,7 @@ from resources import (
 # ============================================================
 
 # Set to True to require waypoint capture before the docking bonus is awarded.
-WAYPOINT_GATE_ENABLED = True
+WAYPOINT_GATE_ENABLED = False
 
 
 def get_rewarders():
