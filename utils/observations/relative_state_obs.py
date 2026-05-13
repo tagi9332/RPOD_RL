@@ -26,19 +26,23 @@ def custom_v_DC_C(deputy, chief):
 
 def make_dist_to_waypoint_fn(standoff_distance: float, boresight: np.ndarray):
     """
-    Factory: returns an observation function that gives the scalar distance
-    from the deputy to the body-fixed standoff waypoint.
+    Factory: returns an observation function giving the signed distance along
+    the docking-port boresight axis relative to the standoff waypoint.
 
-    Returns a 1-element array so BSK-RL's RelativeProperties can handle it.
-    At Phase 0 start (~1500 m away) this is ~1500 m; at the waypoint it is 0.
-    Normalise by MAX_REL_POS in the observation spec for a [0, ~1] range.
+    Value = (r_DC_C · boresight) - standoff_distance:
+      > 0  : inspector is ahead of the waypoint on the correct approach side
+      = 0  : inspector is at the waypoint along the boresight axis
+      < 0  : inspector is behind the waypoint (wrong-side / overshoot)
+
+    Returns a 1-element array. Normalise by MAX_REL_POS for a [-1, +1] range.
     """
-    waypoint_B = np.asarray(boresight, dtype=float) * standoff_distance
+    boresight_hat = np.asarray(boresight, dtype=float)
+    boresight_hat = boresight_hat / np.linalg.norm(boresight_hat)
 
-    def dist_to_waypoint(deputy, chief):
+    def boresight_signed_dist(deputy, chief):
         r_DC_N = np.array(deputy.dynamics.r_BN_N) - np.array(chief.dynamics.r_BN_N)
         CN = MRP2C(chief.dynamics.sigma_BN)
         r_DC_C = CN @ r_DC_N
-        return np.array([np.linalg.norm(r_DC_C - waypoint_B)])
+        return np.array([float(np.dot(r_DC_C, boresight_hat)) - standoff_distance])
 
-    return dist_to_waypoint
+    return boresight_signed_dist

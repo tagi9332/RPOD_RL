@@ -42,7 +42,6 @@ from .sim_parameters import (
     sun_illumination_cone_angle_deg,
     illumination_cutoff_range,
     final_docking_distance,
-    final_corridor_angle_deg,
     STANDOFF_DISTANCE,
     WAYPOINT_CAPTURE_RADIUS,
     VEL_NORM,

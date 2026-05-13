@@ -10,13 +10,13 @@ approach_velocity_weight = 5.0
 docking_reward=20
 
 # Misalignment Discount Factor (This determines how much to penalize dockings at the extreme edge of the approach corridor)
-misalignment_discount_factor=0.8
+misalignment_discount_factor=0.5
 
 # Max Range Penalty
 max_range_penalty=-20
 
 # Boresight Alignment Reward
-approach_corridor_weight=0.01
+approach_corridor_weight=0.1
 
 # Time Penalty — TOTAL penalty over a full episode (step-size independent integral form).
 # At t=T: cumulative = -time_penalty_weight.  At t=T/3: cumulative ≈ -time_penalty_weight*3.7%.
@@ -24,7 +24,7 @@ approach_corridor_weight=0.01
 time_penalty_weight=80.0
 
 # Conjunction Penalty
-conjunction_penalty=-2
+conjunction_penalty=-20
 
 # Illumination Reward
 illumination_weight=0.0025
@@ -35,8 +35,9 @@ waypoint_pos_weight = -0.0003       # log-MSE alpha (same magnitude as rel_range
 waypoint_sparse_reward = 5.0        # one-time bonus when agent first reaches the 30m standoff
 # Phase 0 (approach to waypoint): velocity penalty scales with proximity to waypoint.
 # vel_weight_phase0 multiplies the normalised velocity inside the MSE.
-# Braking curve is zero 100 m+ from waypoint, ramps to full at the waypoint.
+# Braking curve is zero vel_onset_range+ m from waypoint, ramps to full at the waypoint.
+# With MAX_DV=0.5 m/s and ~30s steps, stopping from ~3 m/s needs ~6 burns over ~400m.
 vel_weight_phase0 = 1.0             # loose — agent can sprint early, must slow near waypoint
-vel_onset_range = 100.0             # m — distance at which Phase 0 braking starts
+vel_onset_range = 500.0             # m — distance at which Phase 0 braking starts
 # Phase 1 (final approach): always-on, stronger weight enforces controlled ingress.
 vel_weight_phase1 = 5.0             # firm — same as legacy approach_velocity_weight

@@ -65,9 +65,9 @@ from resources import (
     SIM_DT,
 )
 
-def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 512, total_timesteps: int = 1_000_000):
+def make_env(rank: int, seed: int = 0):
     """
-    Utility function for multiprocessed env.
+    Utility function for multiprocessed training env.
     Instantiates fresh Basilisk objects for each CPU core.
     """
     def _init():
@@ -75,9 +75,9 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
         inspector = InspectorSat("Inspector", sat_args=inspector_sat_args)
 
         bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
-        
+
         scenario = scene.SphericalRSO(
-            n_points=100, radius=1.0, theta_max=np.radians(30), 
+            n_points=100, radius=1.0, theta_max=np.radians(30),
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
@@ -96,10 +96,51 @@ def make_env(rank: int, seed: int = 0, num_cpu: int = 1, n_steps_per_env: int = 
         env_sb3 = Sb3BksEnv(env, randomizer=randomizer)
         env_sb3 = Monitor(env_sb3)
         env_sb3 = FlattenObservation(env_sb3)
-        
+
         env_sb3.reset(seed=seed + rank)
         return env_sb3
-        
+
+    set_random_seed(seed)
+    return _init
+
+
+def make_eval_env(seed: int = 42):
+    """
+    Eval env factory. Uses mode='test' so the RSO orbit persists across eval
+    episodes, giving a stable scenario for comparing checkpoints. The inspector
+    starting position is still re-randomized each episode so the policy is
+    evaluated across varied approach geometries.
+    """
+    def _init():
+        rso = RSOSat("RSO", sat_args=rso_sat_args)
+        inspector = InspectorSat("Inspector", sat_args=inspector_sat_args)
+
+        bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
+
+        scenario = scene.SphericalRSO(
+            n_points=100, radius=1.0, theta_max=np.radians(30),
+            range_max=250, theta_solar_max=np.radians(60)
+        )
+        rewarders = get_rewarders()
+        randomizer = make_sat_arg_randomizer(mode="test", rso_att_type="near_velocity")
+
+        env = ConstellationTasking(
+            satellites=[rso, inspector],
+            sat_arg_randomizer=randomizer,
+            scenario=scenario,
+            rewarder=rewarders,
+            time_limit=SIM_TIME,
+            sim_rate=SIM_DT,
+            log_level="ERROR",
+        )
+
+        env_sb3 = Sb3BksEnv(env, randomizer=randomizer)
+        env_sb3 = Monitor(env_sb3)
+        env_sb3 = FlattenObservation(env_sb3)
+
+        env_sb3.reset(seed=seed)
+        return env_sb3
+
     set_random_seed(seed)
     return _init
 
@@ -120,15 +161,15 @@ if __name__ == "__main__":
     total_timesteps = 5_000_000 
     
     # Create multi-core training env
-    env = SubprocVecEnv([make_env(i, seed=0, total_timesteps=total_timesteps, num_cpu=num_cpu, n_steps_per_env=n_steps_per_env) for i in range(num_cpu)])    
+    env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
 
-    # Creat evaluation env
-    eval_env = DummyVecEnv([make_env(rank=99, seed=42, total_timesteps=total_timesteps, num_cpu=1, n_steps_per_env=n_steps_per_env)])    
+    # Create evaluation env (fixed RSO orbit via mode='test', diverse inspector starts)
+    eval_env = DummyVecEnv([make_eval_env(seed=42)])    
 
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-11_18-28-53\rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models\training_run_2026-05-12_18-25-55\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -167,7 +208,7 @@ if __name__ == "__main__":
         log_path=log_dir,
         eval_freq=eval_freq,
         deterministic=True,
-        n_eval_episodes=5,
+        n_eval_episodes=10,
         render=False
     )
 

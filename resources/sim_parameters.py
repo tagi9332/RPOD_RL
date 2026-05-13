@@ -7,7 +7,7 @@ SIM_TIME = 10800  # seconds (3 hours)
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 0.05  # m/s
+MAX_DV = 0.5  # m/s
 MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 
 # Relative State Initialization Bounds
@@ -21,22 +21,21 @@ MAX_REL_VEL = 0.01    # m/s
 MIN_REL_VEL = 0.0      # m/s
 
 # Conjunction Radius for Docking success
-CONJUNCTION_RADIUS = 10  # meters
+CONJUNCTION_RADIUS = 5  # meters
 
 # --- REWARDER PARAMETERS ---
 # Approach Corridor Angle (degrees)
 # approach_corridor_angle_deg=15
 # final_corridor_angle_deg=5
-approach_corridor_angle_deg=120 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
-final_corridor_angle_deg=180
+approach_corridor_angle_deg=90 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
 
 # Phase Transition Parameters
-docking_phase_range_threshold=100
+docking_phase_range_threshold=120
 final_docking_distance=30
 
 # Waypoint Phase Parameters
 STANDOFF_DISTANCE = 30.0      # m — body-fixed waypoint distance from docking port
-WAYPOINT_CAPTURE_RADIUS = 10.0  # m — sphere radius that triggers Phase 0→1 transition
+WAYPOINT_CAPTURE_RADIUS = 5.0  # m — sphere radius that triggers Phase 0→1 transition
 VEL_NORM = 1.0                # m/s — body-frame velocity normalization in reward
 
 # Satellite Boresights
@@ -44,7 +43,7 @@ inspector_boresight = np.array([0.0, 0.0, 1.0])
 docking_port_boresight = np.array([0.0, 0.0, 1.0])
 
 # Illumination Reward Parameters
-sun_illumination_cone_angle_deg = 45
+sun_illumination_cone_angle_deg = 60
 illumination_cutoff_range = 150
 
 # --- CONFIGURATION DICTIONARIES ---

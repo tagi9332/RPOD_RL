@@ -17,6 +17,15 @@ def plot_interactive_trajectories(all_runs_data, summary_df, output_folder):
         legendgroup='target'
     ))
 
+    # 1b. Plot the 30m standoff waypoint (body-frame [0,0,30] = Hill [0,30,0])
+    fig.add_trace(go.Scatter3d(
+        x=[30], y=[0], z=[0],
+        mode='markers',
+        marker=dict(size=8, color='magenta', symbol='diamond-open'),
+        name='Standoff Waypoint (30m)',
+        legendgroup='waypoint'
+    ))
+
     success_plotted = False
     fail_plotted = False
     start_plotted = False
