@@ -78,19 +78,17 @@ def plot_pareto_front(all_runs_data, summary_df, output_folder):
 
     # Annotate points with Run IDs so you know which trajectories to investigate
     for _, row in success_df.iterrows():
-        is_pareto = (row["total_sim_time"] in pareto_x) and (row["dv_used"] in pareto_y)
-        color = 'darkred' if is_pareto else 'dimgrey'
-        fontweight = 'bold' if is_pareto else 'normal'
-        
+        if (row["total_sim_time"] not in pareto_x) or (row["dv_used"] not in pareto_y):
+            continue
         plt.annotate(
-            f"Run {int(row['run_id'])}", 
+            f"Run {int(row['run_id'])}",
             (row["total_sim_time"], row["dv_used"]),
-            textcoords="offset points", 
-            xytext=(6, 4), 
+            textcoords="offset points",
+            xytext=(6, 4),
             ha='left',
             fontsize=9,
-            color=color,
-            weight=fontweight
+            color='darkred',
+            weight='bold'
         )
 
     # 6. Formatting

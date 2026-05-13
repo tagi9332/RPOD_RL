@@ -30,7 +30,7 @@ CONJUNCTION_RADIUS = 5  # meters
 approach_corridor_angle_deg=90 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
 
 # Phase Transition Parameters
-docking_phase_range_threshold=120
+docking_phase_range_threshold=500
 final_docking_distance=30
 
 # Waypoint Phase Parameters
@@ -44,7 +44,7 @@ docking_port_boresight = np.array([0.0, 0.0, 1.0])
 
 # Illumination Reward Parameters
 sun_illumination_cone_angle_deg = 60
-illumination_cutoff_range = 150
+illumination_cutoff_range = 500
 
 # --- CONFIGURATION DICTIONARIES ---
 rso_sat_args = dict(
