@@ -15,11 +15,25 @@ class SatArgRandomizer:
 
     Attributes:
         mode:                 "train" (re-randomise every reset) or "test" (persist RSO).
-        rso_att_type:         "random" | "velocity" | "anti_velocity" | "near_velocity".
+        rso_att_type:         "random" | "velocity" | "anti_velocity" | "near_velocity" |
+                              "rand_v_bar" | "near_rand_v_bar" |
+                              "radial" | "anti_radial" | "normal" | "anti_normal".
         max_error_deg:        Maximum pointing error for "near_velocity" mode.
                               Mutable — updated by AttitudeErrorScheduler during training.
         fixed_inspector_state: Optional 6-element [rx,ry,rz,vx,vy,vz] in Hill frame.
     """
+
+    # rso_att_type options:
+    #   "random"          – uniformly random orientation
+    #   "velocity"        – body-z along +v-bar
+    #   "anti_velocity"   – body-z along -v-bar
+    #   "near_velocity"   – body-z near +v-bar within max_error_deg
+    #   "rand_v_bar"      – body-z randomly along ±v-bar each episode
+    #   "near_rand_v_bar" – body-z randomly along ±v-bar with max_error_deg error
+    #   "radial"          – body-z along +r-bar (radial)
+    #   "anti_radial"     – body-z along -r-bar
+    #   "normal"          – body-z along +h-bar (orbit normal)
+    #   "anti_normal"     – body-z along -h-bar
 
     def __init__(
         self,
@@ -42,21 +56,43 @@ class SatArgRandomizer:
             e = np.random.uniform(0.0, 0.0005)
             chief_orbit = random_orbit(a=a_meters, e=e)
 
-            if self.rso_att_type in ["velocity", "near_velocity", "anti_velocity"]:
+            _INERTIAL_ATT_MODES = {
+                "velocity", "anti_velocity", "near_velocity",
+                "rand_v_bar", "near_rand_v_bar",
+                "radial", "anti_radial",
+                "normal", "anti_normal",
+            }
+
+            if self.rso_att_type in _INERTIAL_ATT_MODES:
                 r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
-
-                i_v = (-v_N if self.rso_att_type == "anti_velocity" else v_N)
-                i_v = i_v / np.linalg.norm(i_v)
-
+                i_r = r_N / np.linalg.norm(r_N)
+                i_v = v_N / np.linalg.norm(v_N)
                 h_vec = np.cross(r_N, v_N)
                 i_n = h_vec / np.linalg.norm(h_vec)
 
-                body_z = i_v
-                body_y = i_n
+                if self.rso_att_type == "velocity":
+                    body_z = i_v
+                elif self.rso_att_type == "anti_velocity":
+                    body_z = -i_v
+                elif self.rso_att_type in ("near_velocity", "rand_v_bar", "near_rand_v_bar"):
+                    sign = np.random.choice([-1, 1]) if self.rso_att_type in ("rand_v_bar", "near_rand_v_bar") else 1
+                    body_z = sign * i_v
+                elif self.rso_att_type == "radial":
+                    body_z = i_r
+                elif self.rso_att_type == "anti_radial":
+                    body_z = -i_r
+                elif self.rso_att_type == "normal":
+                    body_z = i_n
+                else:  # anti_normal
+                    body_z = -i_n
+
+                # body_y: use orbit normal for non-normal modes, radial for normal modes
+                body_y = i_r if self.rso_att_type in ("normal", "anti_normal") else i_n
                 body_x = np.cross(body_y, body_z)
+                body_x = body_x / np.linalg.norm(body_x)
                 dcm_VN = np.array([body_x, body_y, body_z])
 
-                if self.rso_att_type == "near_velocity":
+                if self.rso_att_type in ("near_velocity", "near_rand_v_bar"):
                     max_error_rad = np.radians(self.max_error_deg)
                     angle = np.random.uniform(0, max_error_rad)
                     axis = random_unit_vector()
