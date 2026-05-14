@@ -94,3 +94,19 @@ class AttitudeErrorScheduler(LinearParameterScheduler):
 
     def __init__(self, initial_error_deg: float = 90.0, final_error_deg: float = 5.0, verbose: int = 0):
         super().__init__(initial=initial_error_deg, final=final_error_deg, verbose=verbose)
+
+
+class DeltaVPenaltyScheduler(LinearParameterScheduler):
+    """
+    Linearly increases the delta-v penalty weight over the course of training.
+
+    Starts with a small penalty (or zero) so the agent first learns to dock, then
+    gradually raises the cost of fuel use to encourage efficient manoeuvres.
+
+    Example: start at 0.0 (no fuel penalty) → 0.5 (strong quadratic penalty).
+    """
+    _attr_name = "scheduled_dv_penalty_weight"
+    _log_key = "curriculum/dv_penalty_weight"
+
+    def __init__(self, initial_weight: float = 0.0, final_weight: float = 0.5, verbose: int = 0):
+        super().__init__(initial=initial_weight, final=final_weight, verbose=verbose)

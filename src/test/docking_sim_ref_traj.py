@@ -195,7 +195,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=45), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=90), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 
@@ -309,10 +309,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-12_21-31-14\ppo_inspector_multicore_checkpoint_5199376_steps.zip"
+    model_path = r"models\att_90deg.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=100)
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=30)
 
     if all_runs_data:
         all_runs_data = [interpolate_to_uniform_time(df) for df in all_runs_data]

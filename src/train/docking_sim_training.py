@@ -46,6 +46,7 @@ from resources import (
     entropy_coeff,
     max_grad_norm,
     clip_range,
+    dv_reward_weight,
 )
 
 # Set BSK logging level
@@ -68,6 +69,7 @@ from resources import (
 # Import rewarder types for isinstance checks in Sb3BksEnv
 from src.rewarders.sparse_event_rewarder import SparseEventReward
 from src.rewarders.docking_corridor_rewarder import DockingCorridorReward
+from src.rewarders.dv_rewarder import DeltaVReward
 
 # --- CLASS DEFINITIONS ---
 
@@ -139,10 +141,12 @@ class Sb3BksEnv(gym.Env):
         self.scheduled_conjunction_radius = inspector_sat_args.get("conjunction_radius", 30)
         self.scheduled_corridor_angle_deg = approach_corridor_angle_deg
         self.scheduled_max_error_deg: float | None = None  # None → no override
+        self.scheduled_dv_penalty_weight: float | None = None  # None → no override
 
         # Cache references to schedulable rewarders
         self._sparse_event_rewarder: SparseEventReward | None = None
         self._corridor_rewarder: DockingCorridorReward | None = None
+        self._dv_rewarder: DeltaVReward | None = None
         rewarder_seq = getattr(env, "rewarder", ()) or ()
         if not hasattr(rewarder_seq, "__iter__"):
             rewarder_seq = (rewarder_seq,)
@@ -151,12 +155,15 @@ class Sb3BksEnv(gym.Env):
                 self._sparse_event_rewarder = r
             elif isinstance(r, DockingCorridorReward):
                 self._corridor_rewarder = r
+            elif isinstance(r, DeltaVReward):
+                self._dv_rewarder = r
 
     def set_scheduled_parameters(
         self,
         conjunction_radius=None,
         corridor_angle_deg=None,
         max_error_deg=None,
+        dv_penalty_weight=None,
     ):
         if conjunction_radius is not None:
             self.scheduled_conjunction_radius = conjunction_radius
@@ -176,12 +183,17 @@ class Sb3BksEnv(gym.Env):
             if self.randomizer is not None:
                 self.randomizer.max_error_deg = max_error_deg
 
+        if dv_penalty_weight is not None and self._dv_rewarder is not None:
+            self._dv_rewarder._reward_weight = dv_penalty_weight
+            self._dv_rewarder.reward_weight = dv_penalty_weight
+
     def reset(self, **kwargs):
         obs_dict, info = self.env.reset(**kwargs)
         self.set_scheduled_parameters(
             conjunction_radius=self.scheduled_conjunction_radius,
             corridor_angle_deg=self.scheduled_corridor_angle_deg,
             max_error_deg=self.scheduled_max_error_deg,
+            dv_penalty_weight=self.scheduled_dv_penalty_weight,
         )
         return obs_dict[self.agent_name], info
 

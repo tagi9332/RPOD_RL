@@ -32,7 +32,7 @@ from bsk_rl import scene, data, ConstellationTasking
 from bsk_rl.sim import fsw
 
 # Import curriculum schedulers
-from src.curriculum import ConjunctionRadiusScheduler, CorridorAngleScheduler, AttitudeErrorScheduler
+from src.curriculum import ConjunctionRadiusScheduler, CorridorAngleScheduler, AttitudeErrorScheduler, DeltaVPenaltyScheduler
 
 # Base training script imports
 from src.train import (
@@ -220,9 +220,10 @@ if __name__ == "__main__":
 
     # 2. Curriculum scheduler config — set to None to disable a scheduler
     # -------------------------------------------------------------------------
-    CONJ_RADIUS_SCHEDULE:   tuple[float, float] | None = None   # e.g. (200, 10) → m
-    CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None  # e.g. (360, 30) → °
-    ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = (0,90)  # e.g. (90, 5)  → °
+    CONJ_RADIUS_SCHEDULE:    tuple[float, float] | None = None   # e.g. (200, 10)   → m
+    CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None   # e.g. (360, 30)   → °
+    ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = (0,90) # e.g. (90, 5)     → °
+    DV_PENALTY_SCHEDULE:     tuple[float, float] | None = None   # e.g. (0.0, 0.5)  → weight
     # -------------------------------------------------------------------------
 
     active_callbacks = [eval_callback, time_callback, checkpoint_callback]
@@ -241,6 +242,11 @@ if __name__ == "__main__":
         i, f = ATTITUDE_ERROR_SCHEDULE
         active_callbacks.append(AttitudeErrorScheduler(i, f))
         print(f"AttitudeErrorScheduler: {i} → {f} °")
+
+    if DV_PENALTY_SCHEDULE is not None:
+        i, f = DV_PENALTY_SCHEDULE
+        active_callbacks.append(DeltaVPenaltyScheduler(i, f))
+        print(f"DeltaVPenaltyScheduler: {i} → {f}")
 
     callbacks = CallbackList(active_callbacks)
 
