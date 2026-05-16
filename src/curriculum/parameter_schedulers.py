@@ -2,9 +2,9 @@
 Curriculum learning callbacks for PPO training.
 
 Each scheduler linearly interpolates its parameter from an initial (easy) value
-to a final (hard) value over the course of training. All schedulers set an
-attribute on Sb3BksEnv via SubprocVecEnv.set_attr(); the environment applies
-the change to the relevant satellite/rewarder/randomizer on the next episode reset.
+to a final (hard) value over the course of training. Each scheduler calls
+Sb3BksEnv.set_scheduled_parameters() via SubprocVecEnv.env_method(), which
+propagates the change to the relevant satellite/rewarder/randomizer immediately.
 
 Usage in docking_sim_multi_process.py:
 
@@ -25,15 +25,15 @@ class LinearParameterScheduler(BaseCallback):
     Base class: linearly schedules one scalar from `initial` to `final` over training.
 
     Subclasses must implement:
-        _attr_name  — str: the Sb3BksEnv attribute set by set_attr
         _log_key    — str: TensorBoard key (e.g. "curriculum/conjunction_radius")
-        _kwarg_name — str: keyword arg name passed to set_scheduled_parameters
-                          (used only for documentation; actual propagation happens
-                           via set_attr + reset)
+        _kwarg_name — str: keyword arg name passed to Sb3BksEnv.set_scheduled_parameters
+
+    Uses env_method (not set_attr) so the call propagates through gymnasium wrapper
+    layers via __getattr__ delegation, reaching Sb3BksEnv regardless of wrapper order.
     """
 
-    _attr_name: str = ""
     _log_key: str = ""
+    _kwarg_name: str = ""
 
     def __init__(self, initial: float, final: float, verbose: int = 0):
         super().__init__(verbose)
@@ -47,7 +47,7 @@ class LinearParameterScheduler(BaseCallback):
 
     def _on_step(self) -> bool:
         value = self._current_value()
-        self.training_env.set_attr(self._attr_name, value)
+        self.training_env.env_method("set_scheduled_parameters", **{self._kwarg_name: value})
         self.logger.record(self._log_key, value)
         return True
 
@@ -58,8 +58,8 @@ class ConjunctionRadiusScheduler(LinearParameterScheduler):
 
     Example: start at 200 m (easy, large capture sphere) → 10 m (tight docking).
     """
-    _attr_name = "scheduled_conjunction_radius"
     _log_key = "curriculum/conjunction_radius"
+    _kwarg_name = "conjunction_radius"
 
     def __init__(self, initial_radius: float = 200.0, final_radius: float = 10.0, verbose: int = 0):
         super().__init__(initial=initial_radius, final=final_radius, verbose=verbose)
@@ -73,8 +73,8 @@ class CorridorAngleScheduler(LinearParameterScheduler):
     Both SparseEventReward and DockingCorridorReward are updated simultaneously
     via Sb3BksEnv.set_scheduled_parameters.
     """
-    _attr_name = "scheduled_corridor_angle_deg"
     _log_key = "curriculum/corridor_angle_deg"
+    _kwarg_name = "corridor_angle_deg"
 
     def __init__(self, initial_angle_deg: float = 360.0, final_angle_deg: float = 30.0, verbose: int = 0):
         super().__init__(initial=initial_angle_deg, final=final_angle_deg, verbose=verbose)
@@ -89,8 +89,8 @@ class AttitudeErrorScheduler(LinearParameterScheduler):
 
     Example: start at 90° (random hemisphere) → 5° (nearly aligned).
     """
-    _attr_name = "scheduled_max_error_deg"
     _log_key = "curriculum/rso_max_error_deg"
+    _kwarg_name = "max_error_deg"
 
     def __init__(self, initial_error_deg: float = 90.0, final_error_deg: float = 5.0, verbose: int = 0):
         super().__init__(initial=initial_error_deg, final=final_error_deg, verbose=verbose)
@@ -103,10 +103,11 @@ class DeltaVPenaltyScheduler(LinearParameterScheduler):
     Starts with a small penalty (or zero) so the agent first learns to dock, then
     gradually raises the cost of fuel use to encourage efficient manoeuvres.
 
-    Example: start at 0.0 (no fuel penalty) → 0.5 (strong quadratic penalty).
+    Pass positive values — DeltaVReward negates internally so larger = stronger penalty.
+    Example: start at 0.0 (no fuel penalty) → 0.45 (strong quadratic penalty).
     """
-    _attr_name = "scheduled_dv_penalty_weight"
     _log_key = "curriculum/dv_penalty_weight"
+    _kwarg_name = "dv_penalty_weight"
 
-    def __init__(self, initial_weight: float = 0.0, final_weight: float = 0.5, verbose: int = 0):
+    def __init__(self, initial_weight: float = 0.0, final_weight: float = 0.45, verbose: int = 0):
         super().__init__(initial=initial_weight, final=final_weight, verbose=verbose)

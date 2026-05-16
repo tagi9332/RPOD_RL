@@ -64,7 +64,7 @@ class DeltaVReward(GlobalReward):
         for satellite in self.scenario.satellites:
             for obs in satellite.observation_builder.observation_spec:
                 if isinstance(obs, ResourceRewardWeight):
-                    obs.weight_vector.append(self.reward_weight)
+                    obs.weight_vector.append(-self.reward_weight)
         super().reset_post_sim_init()
 
     def calculate_reward(self, new_data_dict: dict[str, Data]) -> dict[str, float]:
@@ -74,8 +74,8 @@ class DeltaVReward(GlobalReward):
                 # Absolute value of the dV change
                 dv_magnitude = abs(data.resource_accumulated)
                 if dv_magnitude > 1e-6:
-                    penalties[sat_name] = self.reward_weight * (dv_magnitude ** self.exponent) # Quadratic penalty
-                    # penalties[sat_name] = dv_constant_penalty + (dv_magnitude*dv_reward_weight) # Linear penalty with constant offset
+                    penalties[sat_name] = -self.reward_weight * (dv_magnitude ** self.exponent)
+                    # penalties[sat_name] = dv_constant_penalty - (dv_magnitude * dv_reward_weight)
             else:
                 penalties[sat_name] = 0.0
         return penalties

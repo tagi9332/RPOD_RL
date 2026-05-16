@@ -191,6 +191,7 @@ if __name__ == "__main__":
         learning_rate=learning_rate,
         ent_coef=entropy_coeff,
         max_grad_norm=max_grad_norm,
+        policy_kwargs=dict(net_arch=[128, 128]),
     )
 
     custom_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])

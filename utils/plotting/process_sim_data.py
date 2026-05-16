@@ -19,8 +19,14 @@ def interpolate_to_uniform_time(df, dt=10.0):
     t = df['sim_time'].values.astype(float)
     t_new = np.arange(t[0], t[-1] + dt * 0.5, dt)
 
-    # Columns representing discrete per-step events — forward-fill, not interpolated.
-    _FFILL = {'reward', 'docked_state', 'run_id', 'max_range_violation'}
+    # Discrete event columns — forward-fill (not reward, which needs special treatment).
+    _FFILL = {'docked_state', 'run_id', 'max_range_violation'}
+
+    # Reward columns are point events: forward-fill would duplicate them across
+    # multiple uniform time-steps, corrupting the cumulative sum.  Instead,
+    # interpolate the *cumulative* reward and recover per-step values via diff so
+    # the final cumulative always equals the original episode total.
+    _reward_cols = {c for c in df.columns if c == 'reward' or c.startswith('rew_')}
 
     result = pd.DataFrame({'sim_time': t_new})
 
@@ -28,19 +34,22 @@ def interpolate_to_uniform_time(df, dt=10.0):
         if col == 'sim_time':
             continue
 
-        use_ffill = (
+        if col in _reward_cols:
+            cum = df[col].cumsum().values.astype(float)
+            cum_interp = np.interp(t_new, t, cum)
+            result[col] = np.diff(cum_interp, prepend=0.0)
+        elif (
             col in _FFILL
-            or col.startswith('rew_')
             or pd.api.types.is_bool_dtype(df[col])
-        )
-
-        if not use_ffill and (
+        ):
+            idx = np.clip(np.searchsorted(t, t_new, side='right') - 1, 0, len(df) - 1)
+            result[col] = df[col].values[idx]
+        elif (
             pd.api.types.is_float_dtype(df[col])
             or pd.api.types.is_integer_dtype(df[col])
         ):
             result[col] = np.interp(t_new, t, df[col].astype(float).values)
         else:
-            # Forward-fill: each interpolated point inherits the last actual value.
             idx = np.clip(np.searchsorted(t, t_new, side='right') - 1, 0, len(df) - 1)
             result[col] = df[col].values[idx]
 

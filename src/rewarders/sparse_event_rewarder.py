@@ -13,9 +13,7 @@ from Basilisk.utilities.RigidBodyKinematics import MRP2C
 
 from resources import (
     docking_reward,
-    conjunction_penalty,
     max_range_penalty,
-    misalignment_discount_factor,
     approach_corridor_angle_deg,
     docking_port_boresight,
 )
@@ -99,9 +97,8 @@ class SparseEventReward(GlobalReward):
     Computes terminal/event rewards inside the BSK-RL GlobalReward framework.
 
     Events handled:
-      - Docking (conjunction within approach corridor): +docking_reward x alignment_multiplier
-      - Collision (conjunction outside corridor):        +conjunction_penalty
-      - Max-range violation:                             +max_range_penalty
+      - Conjunction: +docking_reward * (1 - angle/180), max at 0° boresight alignment, 0 at 180°
+      - Max-range violation: +max_range_penalty
     """
     data_store_type = SparseEventDataStore
 
@@ -124,17 +121,14 @@ class SparseEventReward(GlobalReward):
             r = 0.0
             if data.conjunction_angle_deg is not None:
                 angle = data.conjunction_angle_deg
-                if angle <= self.corridor_angle_deg:
-                    if self.waypoint_gate is not None and not self.waypoint_gate.waypoint_captured(sat_id):
-                        logger.info(f"DOCKING BLOCKED (waypoint not captured) for {sat_id}: angle={angle:.1f}°")
-                    else:
-                        max_penalty_fraction = 1.0 - misalignment_discount_factor
-                        alignment_mult = 1.0 - max_penalty_fraction * (angle / max(self.corridor_angle_deg, 1e-6))
-                        r += docking_reward * alignment_mult
-                        logger.info(f"DOCKING: angle={angle:.1f}° reward={docking_reward * alignment_mult:.2f}")
+                if self.waypoint_gate is not None and not self.waypoint_gate.waypoint_captured(sat_id):
+                    logger.info(f"DOCKING BLOCKED (waypoint not captured) for {sat_id}: angle={angle:.1f}°")
                 else:
-                    r += conjunction_penalty
-                    logger.info(f"COLLISION: angle={angle:.1f}° penalty={conjunction_penalty}")
+                    alignment_mult = max(0.0, 1.0 - angle / 180.0)
+                    scaled_reward = docking_reward * alignment_mult
+                    r += scaled_reward
+                    label = "DOCKING" if angle <= self.corridor_angle_deg else "CONJUNCTION"
+                    logger.info(f"{label}: angle={angle:.1f}° reward={scaled_reward:.2f}")
 
             if data.range_violated:
                 r += max_range_penalty

@@ -81,7 +81,7 @@ def make_env(rank: int, seed: int = 0):
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="near_velocity")
+        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="random")
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -122,7 +122,7 @@ def make_eval_env(seed: int = 42):
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="test", rso_att_type="near_velocity")
+        randomizer = make_sat_arg_randomizer(mode="test", rso_att_type="random")
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 10_000_000 
+    total_timesteps = 1_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\r5_90deg.zip"
+    LOAD_PATH = r"models/5_15_2026/100p_.zip"
     # -------------------------------------------------------------------------
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     CONJ_RADIUS_SCHEDULE:    tuple[float, float] | None = None   # e.g. (200, 10)   → m
     CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None   # e.g. (360, 30)   → °
-    ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = (0,90) # e.g. (90, 5)     → °
+    ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = None # e.g. (90, 5)     → °
     DV_PENALTY_SCHEDULE:     tuple[float, float] | None = None   # e.g. (0.0, 0.5)  → weight
     # -------------------------------------------------------------------------
 

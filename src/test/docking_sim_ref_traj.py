@@ -47,7 +47,8 @@ from utils.plotting import (
 from resources import (
     approach_corridor_angle_deg,
     inspector_boresight,
-    docking_port_boresight
+    docking_port_boresight,
+    STANDOFF_DISTANCE,
 )
 
 # Import sim parameters
@@ -94,7 +95,11 @@ class InferenceEnv(Sb3BksEnv):
         # ----------------------------------------------------------------------------
         rso_sigma_BN = np.array(rso.dynamics.sigma_BN)
         dcm_BN_rso = rbk.MRP2C(rso_sigma_BN)
-        
+
+        # Standoff waypoint in Hill frame (body-z boresight * 30m, rotated to Hill)
+        dcm_HN = np.array(rso.dynamics.HN)
+        r_waypoint_H = dcm_HN @ (dcm_BN_rso.T @ (docking_port_boresight * STANDOFF_DISTANCE))
+
         # Vector FROM RSO TO Inspector
         r_rel_rso_to_insp_N = insp_r_N - rso_r_N
 
@@ -131,6 +136,7 @@ class InferenceEnv(Sb3BksEnv):
             info["metrics"]["approach_angle_deg"] = approach_angle_deg
             info["metrics"]["pointing_error"] = pointing_error_rad
             info["metrics"]["rso_sigma_BN"] = rso_sigma_BN
+            info["metrics"]["r_waypoint_H"] = r_waypoint_H
             
             # Hardware Metrics
             insp_torque_cmd = inspector.dynamics.satellite.data_store.satellite.dynamics.satellite.fsw.rwMotorTorque.rwMotorTorqueOutMsg.payloadPointer.motorTorque[0:3]
@@ -195,7 +201,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="near_velocity", max_error_deg=90), 
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="random"), 
         scenario=scenario, 
         rewarder=rewarders, 
         time_limit=SIM_TIME, 
@@ -309,10 +315,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\att_90deg.zip"
+    model_path = r"models\training_run_2026-05-15_19-17-36\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=30)
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=10)
 
     if all_runs_data:
         all_runs_data = [interpolate_to_uniform_time(df) for df in all_runs_data]

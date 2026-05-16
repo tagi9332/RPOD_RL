@@ -22,6 +22,7 @@ from stable_baselines3.common.monitor import Monitor
 
 # Import custom observations
 from utils.observations import (
+    boresight_in_hill,
     custom_sigma_DC,
     custom_r_DC_C,
     custom_v_DC_C,
@@ -113,6 +114,7 @@ class InspectorSat(sats.Satellite):
             dict(prop="v_DC_C",          fn=custom_v_DC_C, norm=5.0),
             # Phase indicator: distance to the 30 m standoff waypoint (≈0 when captured)
             dict(prop="dist_to_waypoint", fn=make_dist_to_waypoint_fn(STANDOFF_DISTANCE, docking_port_boresight), norm=MAX_REL_POS),
+            dict(prop="boresight_Hc",    fn=boresight_in_hill, norm=1.0),
             dict(prop="sun_hat_Hc",      fn=sun_hat_chief),
             chief_name="RSO",
         ),
@@ -295,9 +297,9 @@ if __name__ == "__main__":
     env_sb3_vec = DummyVecEnv([lambda: env_sb3])
 
     model = PPO(
-        "MlpPolicy", 
-        env_sb3_vec, 
-        verbose=1, 
+        "MlpPolicy",
+        env_sb3_vec,
+        verbose=1,
         device="cpu",
         n_steps=2048,
         batch_size=64,
@@ -305,6 +307,7 @@ if __name__ == "__main__":
         learning_rate=learning_rate,
         ent_coef=entropy_coeff,
         max_grad_norm=max_grad_norm,
+        policy_kwargs=dict(net_arch=[128, 128]),
     )
 
     # sim_logger = SimulationLoggerCallback(save_freq=50) # Flushes CSV every 50 updates

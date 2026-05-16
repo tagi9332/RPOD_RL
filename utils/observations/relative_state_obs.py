@@ -1,6 +1,20 @@
 import numpy as np
 from Basilisk.utilities.RigidBodyKinematics import MRP2C, C2MRP
 
+
+def boresight_in_hill(deputy, chief):
+    """RSO docking boresight (body-z) expressed in the Hill frame.
+
+    Gives the agent explicit knowledge of which direction to approach from
+    in the frame it acts in, enabling generalization across arbitrary RSO attitudes.
+    Returns a unit vector — normalize by 1.0.
+    """
+    CN = MRP2C(np.array(chief.dynamics.sigma_BN))
+    boresight_N = CN.T @ np.array([0.0, 0.0, 1.0])
+    HN = np.array(chief.dynamics.HN)
+    return HN @ boresight_N
+
+
 def custom_r_DC_C(deputy, chief):
     """
     Relative position of the Deputy to the Chief, expressed in the Chief's body frame.

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \"import bsk_rl; import inspect; import os; print\\(os.path.dirname\\(bsk_rl.__file__\\)\\)\")"
+      "Bash(python -c \"import bsk_rl; import inspect; import os; print\\(os.path.dirname\\(bsk_rl.__file__\\)\\)\")",
+      "Bash(python -c \"import site; print\\('\\\\n'.join\\(site.getsitepackages\\(\\)\\)\\)\")",
+      "Bash(python -c \"from src.rewarders.docking_corridor_rewarder import DockingCorridorReward, DockingCorridorData, DockingCorridorDataStore; r = DockingCorridorReward\\(\\); print\\('nominal_dt:', r.nominal_dt\\); d = DockingCorridorData\\(step_dt=30.0\\); print\\('step_dt:', d.step_dt\\); print\\('OK'\\)\")"
     ]
   }
 }

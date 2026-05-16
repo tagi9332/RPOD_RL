@@ -207,8 +207,18 @@ class WaypointPhaseReward(GlobalReward):
             mse = float(np.mean(state ** 2))
             dense_reward = waypoint_pos_weight * np.log(mse + 1e-8)
 
-            # One-time sparse bonus on the step the agent first enters Phase 1
-            sparse_bonus = waypoint_sparse_reward if data.is_phase_transition else 0.0
+            # One-time sparse bonus on the step the agent first enters Phase 1,
+            # scaled by how close the capture point is to the boresight axis through
+            # the waypoint center.  Transverse offset 0 → full reward; offset at
+            # WAYPOINT_CAPTURE_RADIUS → 0 reward (glancing edge hit).
+            if data.is_phase_transition:
+                error = data.r_DC_C - _WAYPOINT_B
+                transverse = error - np.dot(error, _BORESIGHT) * _BORESIGHT
+                transverse_dist = float(np.linalg.norm(transverse))
+                alignment_score = max(0.0, 1.0 - transverse_dist / WAYPOINT_CAPTURE_RADIUS)
+                sparse_bonus = waypoint_sparse_reward * alignment_score
+            else:
+                sparse_bonus = 0.0
 
             rewards[sat_id] = float(dense_reward + sparse_bonus)
 
@@ -217,7 +227,9 @@ class WaypointPhaseReward(GlobalReward):
                     f"WAYPOINT CAPTURED by {sat_id}: "
                     f"d_wp={data.dist_to_waypoint:.1f}m, "
                     f"|v|={np.linalg.norm(v):.3f}m/s, "
-                    f"sparse_bonus={sparse_bonus}"
+                    f"transverse_offset={transverse_dist:.1f}m, "
+                    f"alignment={alignment_score:.3f}, "
+                    f"sparse_bonus={sparse_bonus:.2f}"
                 )
 
         return {k: v for k, v in rewards.items() if "RSO" not in k}
