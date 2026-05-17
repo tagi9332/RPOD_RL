@@ -52,8 +52,8 @@ def plot_all_trajectories(all_runs_data, summary_df, output_folder):
     plt.close()
 
 
-def plot_last_100m_views(all_runs_data, summary_df, output_folder):
-    print("Generating 2D Last 100m Ingress Views...")
+def plot_last_30m_views(all_runs_data, summary_df, output_folder):
+    print("Generating 2D Last 30m Ingress Views...")
     
     # Set up a 1x3 grid for the three planar projections
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -62,8 +62,8 @@ def plot_last_100m_views(all_runs_data, summary_df, output_folder):
     # Plot the Target (RSO) and a 100m boundary circle in all views
     for ax in axes:
         ax.scatter(0, 0, color='black', marker='*', s=200, label='Target (RSO)', zorder=5)
-        # Optional: Add a faint dashed circle to visualize the 100m sphere boundary
-        circle = plt.Circle((0, 0), 100, fill=False, linestyle='--', color='gray', alpha=0.5)
+        # Optional: Add a faint dashed circle to visualize the 30m sphere boundary
+        circle = plt.Circle((0, 0), 30, fill=False, linestyle='--', color='gray', alpha=0.5)
         ax.add_patch(circle)
 
     success_plotted, fail_plotted = False, False
@@ -76,11 +76,11 @@ def plot_last_100m_views(all_runs_data, summary_df, output_folder):
         # Calculate the 3D distance from the origin at each time step
         distances = np.sqrt(run_df["hill_x"]**2 + run_df["hill_y"]**2 + run_df["hill_z"]**2)
         
-        # Filter the dataframe to only keep the last 100m
-        mask = distances <= 100.0
+        # Filter the dataframe to only keep the last 30m
+        mask = distances <= 30.0
         filtered_df = run_df[mask]
         
-        # Skip this trajectory if it never got within 100m
+        # Skip this trajectory if it never got within 30m
         if filtered_df.empty:
             continue
 
@@ -125,13 +125,13 @@ def plot_last_100m_views(all_runs_data, summary_df, output_folder):
     for ax in axes:
         ax.grid(True, linestyle=':', alpha=0.7)
         ax.set_aspect('equal')  # Ensure geometry is not distorted
-        ax.set_xlim(-105, 105)  # Lock the view to just outside the 100m range
-        ax.set_ylim(-105, 105)
+        ax.set_xlim(-35, 35)  # Lock the view to just outside the 30m range
+        ax.set_ylim(-35, 35)
 
-    plt.suptitle(f'Last 100m Ingress - Orthographic Views', fontsize=16, y=1.02)
+    plt.suptitle(f'Last 30m Ingress - Orthographic Views', fontsize=16, y=1.02)
     
     # Save the plot
-    plot_path = os.path.join(output_folder, 'mc_last_100m_views.png')
+    plot_path = os.path.join(output_folder, 'mc_last_30m_views.png')
     plt.tight_layout()
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()

@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 1_000_000 
+    total_timesteps = 2_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
@@ -169,17 +169,27 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models/5_15_2026/100p_.zip"
+    LOAD_PATH = r"models\money\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
+
+    # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
+    OVERRIDE_LEARNING_RATE: float | None = 5e-5  # e.g. 5e-5
+    OVERRIDE_ENT_COEF:      float | None = 1e-4  # e.g. 1e-4
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
         print(f"Loading existing model from {LOAD_PATH}...")
-        # Load the model and bind it to your new multi-core environment
+        custom_objects = {}
+        if OVERRIDE_LEARNING_RATE is not None:
+            custom_objects["learning_rate"] = OVERRIDE_LEARNING_RATE
+            print(f"  Overriding learning_rate → {OVERRIDE_LEARNING_RATE}")
+        if OVERRIDE_ENT_COEF is not None:
+            custom_objects["ent_coef"] = OVERRIDE_ENT_COEF
+            print(f"  Overriding ent_coef → {OVERRIDE_ENT_COEF}")
         model = PPO.load(
-            LOAD_PATH, 
-            env=env, 
+            LOAD_PATH,
+            env=env,
             device="cpu",
-            # Note: hyperparameters like learning_rate are loaded from the zip.
+            custom_objects=custom_objects if custom_objects else None,
         )
     else:
         print("Creating a fresh model from scratch...")

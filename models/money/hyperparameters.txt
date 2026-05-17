@@ -1,0 +1,11 @@
+# Learning rate
+learning_rate = 3e-4
+
+# Entropy coefficient
+entropy_coeff = 0.001
+
+# Max gradient norm
+max_grad_norm = 0.5
+
+# Clip range (for PPO)
+clip_range = 0.1

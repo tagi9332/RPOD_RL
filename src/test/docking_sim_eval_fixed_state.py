@@ -43,7 +43,7 @@ from utils.plotting import (
     plot_summary_table,
     plot_pareto_front,
     plot_single_run_rewards,
-    plot_last_100m_views,
+    plot_last_30m_views,
     vizard_output
 )
 # Import weights
@@ -313,7 +313,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\rpo_90deg_attitude_error.zip"
+    model_path = r"models\training_run_2026-05-16_19-55-33\rpo_min_dv_spec.zip"
     num_runs = 20
     #---------------------------------------------------------------------------------
 
@@ -325,7 +325,7 @@ if __name__ == "__main__":
         plot_summary_table(summary_df, output_folder)
         plot_mc_distributions(all_runs_data, summary_df, output_folder)
         plot_pareto_front(all_runs_data, summary_df, output_folder)
-        plot_last_100m_views(all_runs_data, summary_df, output_folder)
+        plot_last_30m_views(all_runs_data, summary_df, output_folder)
 
     # Trim down to worst and best runs
     worst_run_id = summary_df.sort_values(by="total_reward", ascending=True).iloc[0]["run_id"] #type: ignore
