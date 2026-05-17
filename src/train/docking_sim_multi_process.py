@@ -169,12 +169,12 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\money\rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models\training_run_2026-05-17_09-16-57\ppo_inspector_multicore_checkpoint_599928_steps.zip"
     # -------------------------------------------------------------------------
 
     # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
     OVERRIDE_LEARNING_RATE: float | None = 5e-5  # e.g. 5e-5
-    OVERRIDE_ENT_COEF:      float | None = 1e-4  # e.g. 1e-4
+    OVERRIDE_ENT_COEF:      float | None = 5e-4  # e.g. 1e-4
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
         print(f"Loading existing model from {LOAD_PATH}...")

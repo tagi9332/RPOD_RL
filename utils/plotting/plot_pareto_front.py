@@ -81,7 +81,7 @@ def plot_pareto_front(all_runs_data, summary_df, output_folder):
         if (row["total_sim_time"] not in pareto_x) or (row["dv_used"] not in pareto_y):
             continue
         plt.annotate(
-            f"Run {int(row['run_id'])}",
+            f"{int(row['run_id'])}",
             (row["total_sim_time"], row["dv_used"]),
             textcoords="offset points",
             xytext=(6, 4),

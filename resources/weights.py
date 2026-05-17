@@ -32,7 +32,7 @@ illumination_weight=0.0025
 # WaypointPhaseReward
 # Same log-MSE formulation as RelativeRangeLogReward; replaces it entirely.
 waypoint_pos_weight = -0.0003       # log-MSE alpha (same magnitude as rel_range_log_weight)
-waypoint_sparse_reward = 8.0        # one-time bonus when agent first reaches the 30m standoff
+waypoint_sparse_reward = 10.0        # one-time bonus when agent first reaches the 30m standoff
 # Phase 0 (approach to waypoint): velocity penalty scales with proximity to waypoint.
 # vel_weight_phase0 multiplies the normalised velocity inside the MSE.
 # Braking curve is zero vel_onset_range+ m from waypoint, ramps to full at the waypoint.

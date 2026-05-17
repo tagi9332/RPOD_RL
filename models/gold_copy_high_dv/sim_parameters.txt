@@ -11,10 +11,6 @@ MAX_DV = 0.5  # m/s
 MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 
 # Relative State Initialization Bounds
-# MAX_REL_POS = 2000  # meters
-# MIN_REL_POS = 1500     # meters
-# MAX_REL_VEL = 0.01    # m/s
-# MIN_REL_VEL = 0.0      # m/s
 MAX_REL_POS = 2000  # meters
 MIN_REL_POS = 1800     # meters
 MAX_REL_VEL = 0.01    # m/s
@@ -24,10 +20,7 @@ MIN_REL_VEL = 0.0      # m/s
 CONJUNCTION_RADIUS = 5  # meters
 
 # --- REWARDER PARAMETERS ---
-# Approach Corridor Angle (degrees)
-# approach_corridor_angle_deg=15
-# final_corridor_angle_deg=5
-approach_corridor_angle_deg=40 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
+approach_corridor_angle_deg=30 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
 
 # Phase Transition Parameters
 docking_phase_range_threshold=500
