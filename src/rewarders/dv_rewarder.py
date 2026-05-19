@@ -49,7 +49,7 @@ class DeltaVReward(GlobalReward):
     def __init__(
         self,
         reward_weight: Union[float, Any] = dv_reward_weight, # Set your default weight here
-        exponent: float = 2.0,
+        exponent: float = 1.0,
     ) -> None:
         super().__init__()
         self._reward_weight = reward_weight

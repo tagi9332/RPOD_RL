@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # Config
     num_cpu = 14
     n_steps_per_env = 512
-    total_timesteps = 2_000_000 
+    total_timesteps = 1_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-17_09-16-57\ppo_inspector_multicore_checkpoint_599928_steps.zip"
+    LOAD_PATH = r"models\training_run_2026-05-18_07-07-29\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     CONJ_RADIUS_SCHEDULE:    tuple[float, float] | None = None   # e.g. (200, 10)   → m
     CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None   # e.g. (360, 30)   → °
     ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = None # e.g. (90, 5)     → °
-    DV_PENALTY_SCHEDULE:     tuple[float, float] | None = None   # e.g. (0.0, 0.5)  → weight
+    DV_PENALTY_SCHEDULE:     tuple[float, float] | None = (0.1, 1.0)   # e.g. (0.0, 0.5)  → weight
     # -------------------------------------------------------------------------
 
     active_callbacks = [eval_callback, time_callback, checkpoint_callback]

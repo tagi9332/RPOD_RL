@@ -94,7 +94,7 @@ def get_rewarders():
     return (
         DeltaVReward(
             reward_weight=dv_reward_weight,
-            exponent=2.0,
+            exponent=1.0,
         ),
         WaypointPhaseReward(gate=gate),
         DockingCorridorReward(
