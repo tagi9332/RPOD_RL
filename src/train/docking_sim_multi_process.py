@@ -154,9 +154,12 @@ if __name__ == "__main__":
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(model_path, exist_ok=True)
     
+    # Detect number of CPU cores for parallel environments (leave 2 cores free to avoid system overload)
+    cpu = os.cpu_count()
+    num_cpu = max(cpu - 4, 1) if cpu is not None else 1
+    print(f"Detected {cpu} CPU cores. Setting up {num_cpu} parallel environments for training.")
 
     # Config
-    num_cpu = 14
     n_steps_per_env = 512
     total_timesteps = 1_000_000 
     
