@@ -50,7 +50,10 @@ from utils.plotting import (
     plot_distance_history,
     plot_dv_vs_distance,
     plot_reward_heatmap,
-    vizard_output
+    vizard_output,
+    plot_impulse_histogram,
+    plot_impulse_timeseries,
+    plot_mean_impulse_history,
 )
 # Import weights
 from resources import (
@@ -353,11 +356,12 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-18_18-48-33\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-05-25_07-17-32\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
     all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=100)
 
+    raw_runs_data = all_runs_data  # keep raw per-step data for impulse analysis
     if all_runs_data:
         all_runs_data = [interpolate_to_uniform_time(df) for df in all_runs_data]
 
@@ -377,6 +381,8 @@ if __name__ == "__main__":
         plot_distance_history(all_runs_data, summary_df, output_folder)
         plot_dv_vs_distance(all_runs_data, summary_df, output_folder)
         plot_reward_heatmap(all_runs_data, summary_df, output_folder)
+        plot_impulse_histogram(raw_runs_data, summary_df, output_folder)
+        plot_mean_impulse_history(raw_runs_data, summary_df, output_folder)
 
     # Trim down to worst and best runs
     worst_run_id = summary_df.sort_values(by="total_reward", ascending=True).iloc[0]["run_id"] #type: ignore
@@ -404,5 +410,7 @@ if __name__ == "__main__":
     plot_control_analysis(processed_data_worst, os.path.join(output_folder, "worst_run"))
     plot_trajectory_analysis(processed_data_worst, os.path.join(output_folder, "worst_run"))
     plot_single_run_rewards(worst_run_df, os.path.join(output_folder, "worst_run"), prefix="worst_")
+
+    plot_impulse_timeseries(best_run_df, worst_run_df, output_folder)
 
     print("\nAll inferences and plots complete!")

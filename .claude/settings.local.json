@@ -3,7 +3,11 @@
     "allow": [
       "Bash(python -c \"import bsk_rl; import inspect; import os; print\\(os.path.dirname\\(bsk_rl.__file__\\)\\)\")",
       "Bash(python -c \"import site; print\\('\\\\n'.join\\(site.getsitepackages\\(\\)\\)\\)\")",
-      "Bash(python -c \"from src.rewarders.docking_corridor_rewarder import DockingCorridorReward, DockingCorridorData, DockingCorridorDataStore; r = DockingCorridorReward\\(\\); print\\('nominal_dt:', r.nominal_dt\\); d = DockingCorridorData\\(step_dt=30.0\\); print\\('step_dt:', d.step_dt\\); print\\('OK'\\)\")"
+      "Bash(python -c \"from src.rewarders.docking_corridor_rewarder import DockingCorridorReward, DockingCorridorData, DockingCorridorDataStore; r = DockingCorridorReward\\(\\); print\\('nominal_dt:', r.nominal_dt\\); d = DockingCorridorData\\(step_dt=30.0\\); print\\('step_dt:', d.step_dt\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import bsk_rl; import os; print\\(os.path.dirname\\(bsk_rl.__file__\\)\\)\")",
+      "Bash(python -c \"from bsk_rl.sim import fsw; import inspect; src = inspect.getfile\\(fsw\\); print\\(src\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, 'd:/tanne/Documents/rpod_rl'\\); from bsk_rl.obs import ResourceRewardWeight; import inspect; print\\(inspect.getsource\\(ResourceRewardWeight\\)\\)\")"
     ]
   }
 }

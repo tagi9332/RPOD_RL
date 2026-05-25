@@ -19,3 +19,8 @@ from utils.plotting.plot_approach_analysis import (
     plot_reward_heatmap,
 )
 from utils.plotting.vizard_output import vizard_output
+from utils.plotting.plot_impulse_analysis import (
+    plot_impulse_histogram,
+    plot_impulse_timeseries,
+    plot_mean_impulse_history,
+)

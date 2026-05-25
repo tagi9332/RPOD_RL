@@ -111,3 +111,35 @@ class DeltaVPenaltyScheduler(LinearParameterScheduler):
 
     def __init__(self, initial_weight: float = 0.0, final_weight: float = 0.45, verbose: int = 0):
         super().__init__(initial=initial_weight, final=final_weight, verbose=verbose)
+
+
+class MaxDriftDurationScheduler(LinearParameterScheduler):
+    """
+    Linearly increases the maximum drift duration after each impulse.
+
+    Longer drifts require the agent to plan further ahead (harder); starting
+    short lets it learn coarse maneuvering before committing to sparse actions.
+
+    Example: start at 30 s (easy, frequent corrections) → 120 s (hard, long coasts).
+    """
+    _log_key = "curriculum/max_drift_duration"
+    _kwarg_name = "max_drift_duration"
+
+    def __init__(self, initial_duration: float = 30.0, final_duration: float = 120.0, verbose: int = 0):
+        super().__init__(initial=initial_duration, final=final_duration, verbose=verbose)
+
+
+class MaxDVScheduler(LinearParameterScheduler):
+    """
+    Linearly decreases the maximum delta-V per impulse.
+
+    Reducing max_dv forces the agent toward smaller, more efficient maneuvers
+    that match tighter real-world propulsion constraints.
+
+    Example: start at 2.0 m/s (easy, ample thrust) → 0.5 m/s (hard, tight budget).
+    """
+    _log_key = "curriculum/max_dv"
+    _kwarg_name = "max_dv"
+
+    def __init__(self, initial_dv: float = 2.0, final_dv: float = 0.5, verbose: int = 0):
+        super().__init__(initial=initial_dv, final=final_dv, verbose=verbose)

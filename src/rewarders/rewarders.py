@@ -88,12 +88,19 @@ from resources import (
 WAYPOINT_GATE_ENABLED = False
 
 
-def get_rewarders():
-    """Builds and returns the tuple of rewarders for the RL environment."""
+def get_rewarders(dv_weight=None):
+    """Builds and returns the tuple of rewarders for the RL environment.
+
+    Args:
+        dv_weight: float, callable, or None.  If a callable is passed (e.g.
+            randomizer.get_dv_weight), DeltaVReward will invoke it each episode
+            reset so the active weight tracks whatever the randomizer sampled.
+            Pass None to use the default dv_reward_weight from resources.
+    """
     gate = WaypointGate() if WAYPOINT_GATE_ENABLED else None
     return (
         DeltaVReward(
-            reward_weight=dv_reward_weight,
+            reward_weight=dv_weight if dv_weight is not None else dv_reward_weight,
             exponent=1.0,
         ),
         WaypointPhaseReward(gate=gate),

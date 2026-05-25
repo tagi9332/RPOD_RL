@@ -144,6 +144,8 @@ class Sb3BksEnv(gym.Env):
         self.scheduled_corridor_angle_deg = approach_corridor_angle_deg
         self.scheduled_max_error_deg: float | None = None  # None → no override
         self.scheduled_dv_penalty_weight: float | None = None  # None → no override
+        self.scheduled_max_drift_duration: float | None = None  # None → no override
+        self.scheduled_max_dv: float | None = None  # None → no override
 
         # Cache references to schedulable rewarders
         self._sparse_event_rewarder: SparseEventReward | None = None
@@ -160,12 +162,25 @@ class Sb3BksEnv(gym.Env):
             elif isinstance(r, DeltaVReward):
                 self._dv_rewarder = r
 
+        # Cache reference to the inspector's ImpulsiveThrustHill action
+        self._impulsive_thrust_action: ImpulsiveThrustHill | None = None
+        for sat in env.satellites:
+            if "Inspector" in sat.name:
+                for action in getattr(sat, "action_spec", []):
+                    if isinstance(action, ImpulsiveThrustHill):
+                        self._impulsive_thrust_action = action
+                        break
+            if self._impulsive_thrust_action is not None:
+                break
+
     def set_scheduled_parameters(
         self,
         conjunction_radius=None,
         corridor_angle_deg=None,
         max_error_deg=None,
         dv_penalty_weight=None,
+        max_drift_duration=None,
+        max_dv=None,
     ):
         if conjunction_radius is not None:
             self.scheduled_conjunction_radius = conjunction_radius
@@ -189,6 +204,14 @@ class Sb3BksEnv(gym.Env):
             self._dv_rewarder._reward_weight = dv_penalty_weight
             self._dv_rewarder.reward_weight = dv_penalty_weight
 
+        if max_drift_duration is not None and self._impulsive_thrust_action is not None:
+            self._impulsive_thrust_action.max_drift_duration = max_drift_duration
+            self.scheduled_max_drift_duration = max_drift_duration
+
+        if max_dv is not None and self._impulsive_thrust_action is not None:
+            self._impulsive_thrust_action.max_dv = max_dv
+            self.scheduled_max_dv = max_dv
+
     def reset(self, **kwargs):
         obs_dict, info = self.env.reset(**kwargs)
         self.set_scheduled_parameters(
@@ -196,6 +219,8 @@ class Sb3BksEnv(gym.Env):
             corridor_angle_deg=self.scheduled_corridor_angle_deg,
             max_error_deg=self.scheduled_max_error_deg,
             dv_penalty_weight=self.scheduled_dv_penalty_weight,
+            max_drift_duration=self.scheduled_max_drift_duration,
+            max_dv=self.scheduled_max_dv,
         )
         return obs_dict[self.agent_name], info
 

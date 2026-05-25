@@ -5,6 +5,7 @@ from Basilisk.utilities.RigidBodyKinematics import C2MRP
 from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief
 
 from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL
+from resources import dv_reward_weight as _default_dv_weight
 
 MU_EARTH = 3.986004418e14  # m^3/s^2
 
@@ -41,6 +42,9 @@ class SatArgRandomizer:
         rso_att_type: str = "near_velocity",
         max_error_deg: float = 5.0,
         fixed_inspector_state=None,
+        dv_weight_mean: float | None = None,
+        dv_weight_std: float = 0.05,
+        dv_weight_min: float = 0.0,
     ):
         self.mode = mode
         self.rso_att_type = rso_att_type
@@ -48,7 +52,21 @@ class SatArgRandomizer:
         self.fixed_inspector_state = fixed_inspector_state
         self._persistent_rso_state: dict = {}
 
+        self.dv_weight_mean = dv_weight_mean
+        self.dv_weight_std = dv_weight_std
+        self.dv_weight_min = dv_weight_min
+        # Holds the weight sampled for the current episode.
+        self._dv_reward_weight: float = dv_weight_mean if dv_weight_mean is not None else _default_dv_weight
+
+    def get_dv_weight(self) -> float:
+        """Returns the dv penalty weight for the current episode."""
+        return self._dv_reward_weight
+
     def __call__(self, satellites):
+        if self.dv_weight_mean is not None and self.mode == "train":
+            sampled = np.random.normal(self.dv_weight_mean, self.dv_weight_std)
+            self._dv_reward_weight = max(self.dv_weight_min, sampled)
+
         generate_new_rso = (self.mode == "train") or (not self._persistent_rso_state)
 
         if generate_new_rso:
@@ -156,6 +174,9 @@ def make_sat_arg_randomizer(
     rso_att_type: str = "near_velocity",
     max_error_deg: float = 5.0,
     fixed_inspector_state=None,
+    dv_weight_mean: float | None = None,
+    dv_weight_std: float = 0.05,
+    dv_weight_min: float = 0.0,
 ) -> SatArgRandomizer:
     """Factory — returns a SatArgRandomizer instance (callable, mutable)."""
     return SatArgRandomizer(
@@ -163,4 +184,7 @@ def make_sat_arg_randomizer(
         rso_att_type=rso_att_type,
         max_error_deg=max_error_deg,
         fixed_inspector_state=fixed_inspector_state,
+        dv_weight_mean=dv_weight_mean,
+        dv_weight_std=dv_weight_std,
+        dv_weight_min=dv_weight_min,
     )

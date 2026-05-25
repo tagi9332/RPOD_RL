@@ -32,7 +32,7 @@ from bsk_rl import scene, data, ConstellationTasking
 from bsk_rl.sim import fsw
 
 # Import curriculum schedulers
-from src.curriculum import ConjunctionRadiusScheduler, CorridorAngleScheduler, AttitudeErrorScheduler, DeltaVPenaltyScheduler
+from src.curriculum import ConjunctionRadiusScheduler, CorridorAngleScheduler, AttitudeErrorScheduler, DeltaVPenaltyScheduler, MaxDriftDurationScheduler, MaxDVScheduler
 
 # Base training script imports
 from src.train import (
@@ -65,6 +65,14 @@ from resources import (
     SIM_DT,
 )
 
+# --- DV WEIGHT RANDOMIZATION CONFIG ---
+# Set DV_WEIGHT_MEAN to None to disable randomization (uses fixed dv_reward_weight from resources).
+# When enabled, each episode samples weight ~ N(mean, std), clipped to >= min.
+DV_WEIGHT_MEAN: float | None = None   # e.g. 0.25
+DV_WEIGHT_STD:  float        = 0.25
+DV_WEIGHT_MIN:  float        = 0.1
+# ---------------------------------------
+
 def make_env(rank: int, seed: int = 0):
     """
     Utility function for multiprocessed training env.
@@ -80,8 +88,14 @@ def make_env(rank: int, seed: int = 0):
             n_points=100, radius=1.0, theta_max=np.radians(30),
             range_max=250, theta_solar_max=np.radians(60)
         )
-        rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="random")
+        randomizer = make_sat_arg_randomizer(
+            mode="train",
+            rso_att_type="random",
+            dv_weight_mean=DV_WEIGHT_MEAN,
+            dv_weight_std=DV_WEIGHT_STD,
+            dv_weight_min=DV_WEIGHT_MIN,
+        )
+        rewarders = get_rewarders(dv_weight=randomizer.get_dv_weight)
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -172,12 +186,12 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-18_07-07-29\rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models\training_run_2026-05-20_15-28-45\0_5_dv.zip"
     # -------------------------------------------------------------------------
 
     # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
-    OVERRIDE_LEARNING_RATE: float | None = 5e-5  # e.g. 5e-5
-    OVERRIDE_ENT_COEF:      float | None = 5e-4  # e.g. 1e-4
+    OVERRIDE_LEARNING_RATE: float | None = None  # e.g. 5e-5
+    OVERRIDE_ENT_COEF:      float | None = None  # e.g. 5e-4
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
         print(f"Loading existing model from {LOAD_PATH}...")
@@ -233,10 +247,12 @@ if __name__ == "__main__":
 
     # 2. Curriculum scheduler config — set to None to disable a scheduler
     # -------------------------------------------------------------------------
-    CONJ_RADIUS_SCHEDULE:    tuple[float, float] | None = None   # e.g. (200, 10)   → m
-    CORRIDOR_ANGLE_SCHEDULE: tuple[float, float] | None = None   # e.g. (360, 30)   → °
-    ATTITUDE_ERROR_SCHEDULE: tuple[float, float] | None = None # e.g. (90, 5)     → °
-    DV_PENALTY_SCHEDULE:     tuple[float, float] | None = (0.1, 1.0)   # e.g. (0.0, 0.5)  → weight
+    CONJ_RADIUS_SCHEDULE:        tuple[float, float] | None = None   # e.g. (200, 10)    → m
+    CORRIDOR_ANGLE_SCHEDULE:     tuple[float, float] | None = None   # e.g. (360, 30)    → °
+    ATTITUDE_ERROR_SCHEDULE:     tuple[float, float] | None = None   # e.g. (90, 5)      → °
+    DV_PENALTY_SCHEDULE:         tuple[float, float] | None = None   # e.g. (0.0, 0.5)   → weight
+    MAX_DRIFT_DURATION_SCHEDULE: tuple[float, float] | None = None   # e.g. (30, 120)    → s
+    MAX_DV_SCHEDULE:             tuple[float, float] | None = None   # e.g. (2.0, 0.5)   → m/s
     # -------------------------------------------------------------------------
 
     active_callbacks = [eval_callback, time_callback, checkpoint_callback]
@@ -260,6 +276,16 @@ if __name__ == "__main__":
         i, f = DV_PENALTY_SCHEDULE
         active_callbacks.append(DeltaVPenaltyScheduler(i, f))
         print(f"DeltaVPenaltyScheduler: {i} → {f}")
+
+    if MAX_DRIFT_DURATION_SCHEDULE is not None:
+        i, f = MAX_DRIFT_DURATION_SCHEDULE
+        active_callbacks.append(MaxDriftDurationScheduler(i, f))
+        print(f"MaxDriftDurationScheduler: {i} → {f} s")
+
+    if MAX_DV_SCHEDULE is not None:
+        i, f = MAX_DV_SCHEDULE
+        active_callbacks.append(MaxDVScheduler(i, f))
+        print(f"MaxDVScheduler: {i} → {f} m/s")
 
     callbacks = CallbackList(active_callbacks)
 

@@ -3,6 +3,8 @@ from src.curriculum.parameter_schedulers import (
     CorridorAngleScheduler,
     AttitudeErrorScheduler,
     DeltaVPenaltyScheduler,
+    MaxDriftDurationScheduler,
+    MaxDVScheduler,
 )
 
 __all__ = [
@@ -10,4 +12,6 @@ __all__ = [
     "CorridorAngleScheduler",
     "AttitudeErrorScheduler",
     "DeltaVPenaltyScheduler",
+    "MaxDriftDurationScheduler",
+    "MaxDVScheduler",
 ]
