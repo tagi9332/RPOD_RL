@@ -13,7 +13,8 @@ from resources import (
     MIN_REL_POS,
     MAX_REL_POS,
     MIN_REL_VEL,
-    MAX_REL_VEL
+    MAX_REL_VEL,
+    INITIAL_APPROACH_VEL,
 )
 
 def sat_arg_randomizer_rso_hill(satellites):
@@ -25,11 +26,14 @@ def sat_arg_randomizer_rso_hill(satellites):
     args = {}
     
     for inspector in inspectors:
+        def _deputy_state():
+            pos = random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS)
+            vel = -pos / np.linalg.norm(pos) * INITIAL_APPROACH_VEL
+            return np.concatenate((pos, vel))
+
         relative_randomizer = relative_to_chief(
             chief_name="RSO", chief_orbit=chief_orbit,
-            deputy_relative_state={
-                inspector.name: lambda: np.concatenate((random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS), random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL))),
-            },
+            deputy_relative_state={inspector.name: _deputy_state},
         )
         args.update(relative_randomizer([rso, inspector]))
     

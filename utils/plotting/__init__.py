@@ -17,6 +17,7 @@ from utils.plotting.plot_approach_analysis import (
     plot_distance_history,
     plot_dv_vs_distance,
     plot_reward_heatmap,
+    plot_sun_angle_vs_distance,
 )
 from utils.plotting.vizard_output import vizard_output
 from utils.plotting.plot_impulse_analysis import (

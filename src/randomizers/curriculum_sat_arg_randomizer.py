@@ -25,7 +25,7 @@ from Basilisk.utilities.orbitalMotion import elem2rv
 from Basilisk.utilities.RigidBodyKinematics import C2MRP
 from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief
 
-from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL
+from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL, INITIAL_APPROACH_VEL
 
 MU_EARTH = 3.986004418e14  # m^3/s^2
 
@@ -54,11 +54,13 @@ class CurriculumSatArgRandomizer:
         mode: str = "train",
         rso_att_type: str = "near_velocity",
         max_error_deg: float = 5.0,
+        use_original_vel_dist: bool = True,
     ):
         self.stage = stage
         self.mode = mode
         self.rso_att_type = rso_att_type
         self.max_error_deg = max_error_deg
+        self.use_original_vel_dist = use_original_vel_dist
         self._persistent_rso_state: dict = {}
 
     def _sample_rso_state(self) -> dict:
@@ -140,9 +142,14 @@ class CurriculumSatArgRandomizer:
                 deputy_fn = _hill_state
 
             else:
+                use_orig = self.use_original_vel_dist
+
                 def deputy_fn():
                     r = random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS)
-                    v = random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL)
+                    if use_orig:
+                        v = random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL)
+                    else:
+                        v = -r / np.linalg.norm(r) * INITIAL_APPROACH_VEL
                     return np.concatenate([r, v])
 
             rel_rand = relative_to_chief(

@@ -4,7 +4,7 @@ from Basilisk.utilities.orbitalMotion import elem2rv
 from Basilisk.utilities.RigidBodyKinematics import C2MRP
 from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief
 
-from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL
+from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL, INITIAL_APPROACH_VEL
 from resources import dv_reward_weight as _default_dv_weight
 
 MU_EARTH = 3.986004418e14  # m^3/s^2
@@ -45,12 +45,14 @@ class SatArgRandomizer:
         dv_weight_mean: float | None = None,
         dv_weight_std: float = 0.05,
         dv_weight_min: float = 0.0,
+        use_original_vel_dist: bool = True,
     ):
         self.mode = mode
         self.rso_att_type = rso_att_type
         self.max_error_deg = max_error_deg
         self.fixed_inspector_state = fixed_inspector_state
         self._persistent_rso_state: dict = {}
+        self.use_original_vel_dist = use_original_vel_dist
 
         self.dv_weight_mean = dv_weight_mean
         self.dv_weight_std = dv_weight_std
@@ -152,10 +154,15 @@ class SatArgRandomizer:
             if self.fixed_inspector_state is not None:
                 deputy_state_func = lambda: np.array(self.fixed_inspector_state)
             else:
-                deputy_state_func = lambda: np.concatenate((
-                    random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS),
-                    random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL),
-                ))
+                use_orig = self.use_original_vel_dist
+
+                def deputy_state_func():
+                    pos = random_unit_vector() * np.random.uniform(MIN_REL_POS, MAX_REL_POS)
+                    if use_orig:
+                        vel = random_unit_vector() * np.random.uniform(MIN_REL_VEL, MAX_REL_VEL)
+                    else:
+                        vel = -(pos / np.linalg.norm(pos)) * INITIAL_APPROACH_VEL
+                    return np.concatenate((pos, vel))
 
             relative_randomizer = relative_to_chief(
                 chief_name="RSO",
@@ -177,6 +184,7 @@ def make_sat_arg_randomizer(
     dv_weight_mean: float | None = None,
     dv_weight_std: float = 0.05,
     dv_weight_min: float = 0.0,
+    use_original_vel_dist: bool = False,
 ) -> SatArgRandomizer:
     """Factory — returns a SatArgRandomizer instance (callable, mutable)."""
     return SatArgRandomizer(
@@ -187,4 +195,5 @@ def make_sat_arg_randomizer(
         dv_weight_mean=dv_weight_mean,
         dv_weight_std=dv_weight_std,
         dv_weight_min=dv_weight_min,
+        use_original_vel_dist=use_original_vel_dist,
     )

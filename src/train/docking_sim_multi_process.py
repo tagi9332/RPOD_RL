@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
     # Config
     n_steps_per_env = 512
-    total_timesteps = 1_000_000 
+    total_timesteps = 4_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
@@ -186,12 +186,12 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-20_15-28-45\0_5_dv.zip"
+    LOAD_PATH = r"models\training_run_2026-05-27_20-41-42\rpo_min_dv_spec.zip"
     # -------------------------------------------------------------------------
 
     # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
-    OVERRIDE_LEARNING_RATE: float | None = None  # e.g. 5e-5
-    OVERRIDE_ENT_COEF:      float | None = None  # e.g. 5e-4
+    OVERRIDE_LEARNING_RATE: float | None = 1e-4  # e.g. 5e-5
+    OVERRIDE_ENT_COEF:      float | None = 1e-3  # e.g. 5e-4
 
     if LOAD_MODEL and os.path.exists(LOAD_PATH):
         print(f"Loading existing model from {LOAD_PATH}...")
@@ -220,6 +220,7 @@ if __name__ == "__main__":
             learning_rate=learning_rate,
             ent_coef=entropy_coeff,
             max_grad_norm=max_grad_norm,
+            gamma=1.0,
         )
 
 
@@ -259,32 +260,32 @@ if __name__ == "__main__":
 
     if CONJ_RADIUS_SCHEDULE is not None:
         i, f = CONJ_RADIUS_SCHEDULE
-        active_callbacks.append(ConjunctionRadiusScheduler(i, f))
+        active_callbacks.append(ConjunctionRadiusScheduler(i, f, eval_env=eval_env))
         print(f"ConjunctionRadiusScheduler: {i} → {f} m")
 
     if CORRIDOR_ANGLE_SCHEDULE is not None:
         i, f = CORRIDOR_ANGLE_SCHEDULE
-        active_callbacks.append(CorridorAngleScheduler(i, f))
+        active_callbacks.append(CorridorAngleScheduler(i, f, eval_env=eval_env))
         print(f"CorridorAngleScheduler: {i} → {f} °")
 
     if ATTITUDE_ERROR_SCHEDULE is not None:
         i, f = ATTITUDE_ERROR_SCHEDULE
-        active_callbacks.append(AttitudeErrorScheduler(i, f))
+        active_callbacks.append(AttitudeErrorScheduler(i, f, eval_env=eval_env))
         print(f"AttitudeErrorScheduler: {i} → {f} °")
 
     if DV_PENALTY_SCHEDULE is not None:
         i, f = DV_PENALTY_SCHEDULE
-        active_callbacks.append(DeltaVPenaltyScheduler(i, f))
+        active_callbacks.append(DeltaVPenaltyScheduler(i, f, eval_env=eval_env))
         print(f"DeltaVPenaltyScheduler: {i} → {f}")
 
     if MAX_DRIFT_DURATION_SCHEDULE is not None:
         i, f = MAX_DRIFT_DURATION_SCHEDULE
-        active_callbacks.append(MaxDriftDurationScheduler(i, f))
+        active_callbacks.append(MaxDriftDurationScheduler(i, f, eval_env=eval_env))
         print(f"MaxDriftDurationScheduler: {i} → {f} s")
 
     if MAX_DV_SCHEDULE is not None:
         i, f = MAX_DV_SCHEDULE
-        active_callbacks.append(MaxDVScheduler(i, f))
+        active_callbacks.append(MaxDVScheduler(i, f, eval_env=eval_env))
         print(f"MaxDVScheduler: {i} → {f} m/s")
 
     callbacks = CallbackList(active_callbacks)

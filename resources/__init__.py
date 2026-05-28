@@ -16,6 +16,8 @@ from .weights import (
     vel_weight_phase0,
     vel_onset_range,
     vel_weight_phase1,
+    fuel_bonus_max,
+    fuel_bonus_baseline,
 )
 from .hyperparameters import (
     learning_rate,
@@ -27,10 +29,12 @@ from .hyperparameters import (
 from .sim_parameters import (
     SIM_TIME,
     SIM_DT,
+    DV_AVAILABLE_INIT,
     MAX_REL_POS,
     MAX_REL_VEL,
     MIN_REL_POS,
     MIN_REL_VEL,
+    INITIAL_APPROACH_VEL,
     MAX_DV,
     MAX_DRIFT_DURATION,
     rso_sat_args,

@@ -16,9 +16,9 @@ def plot_all_trajectories(all_runs_data, summary_df, output_folder):
 
     for idx, run_df in enumerate(all_runs_data):
         is_success = summary_df.loc[idx, "success"]
-        color = 'mediumseagreen' if is_success else 'crimson'
+        color = 'mediumseagreen' if is_success else '#EF553B'
         alpha = 0.8 if is_success else 0.3
-        
+
         # Trajectory Labels
         traj_label = None
         if is_success and not success_plotted:
@@ -35,8 +35,8 @@ def plot_all_trajectories(all_runs_data, summary_df, output_folder):
         # --- Legend logic for Initial Position ---
         start_label = "Initial Position" if not start_plotted else None
         
-        ax.scatter(run_df["hill_x"].iloc[0], run_df["hill_y"].iloc[0], run_df["hill_z"].iloc[0], 
-                   color='blue', s=15, alpha=0.5, label=start_label)
+        ax.scatter(run_df["hill_x"].iloc[0], run_df["hill_y"].iloc[0], run_df["hill_z"].iloc[0],
+                   color='#5DADE2', s=15, alpha=0.5, label=start_label)
         
         start_plotted = True 
         # -----------------------------------------
@@ -70,9 +70,9 @@ def plot_last_30m_views(all_runs_data, summary_df, output_folder):
 
     for idx, run_df in enumerate(all_runs_data):
         is_success = summary_df.loc[idx, "success"]
-        color = 'mediumseagreen' if is_success else 'crimson'
+        color = 'mediumseagreen' if is_success else '#EF553B'
         alpha = 0.8 if is_success else 0.3
-        
+
         # Calculate the 3D distance from the origin at each time step
         distances = np.sqrt(run_df["hill_x"]**2 + run_df["hill_y"]**2 + run_df["hill_z"]**2)
         
@@ -128,7 +128,7 @@ def plot_last_30m_views(all_runs_data, summary_df, output_folder):
         ax.set_xlim(-35, 35)  # Lock the view to just outside the 30m range
         ax.set_ylim(-35, 35)
 
-    plt.suptitle(f'Last 30m Ingress - Orthographic Views', fontsize=16, y=1.02)
+    plt.suptitle(f'Last 30m Ingress - Orthographic Views', fontsize=18, y=1.02)
     
     # Save the plot
     plot_path = os.path.join(output_folder, 'mc_last_30m_views.png')

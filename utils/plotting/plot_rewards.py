@@ -15,7 +15,7 @@ def plot_single_run_rewards(run_df: pd.DataFrame, save_dir: str, prefix: str = "
     
     # 1. Step-by-Step Rewards
     ax0 = plt.subplot(gs[0])
-    ax0.set_title(f"{prefix.replace('_', ' ').title()}Reward Signal per Timestep", fontsize=14, fontweight="bold")
+    ax0.set_title(f"{prefix.replace('_', ' ').title()}Reward Signal per Timestep", fontsize=16, fontweight="bold")
     for col in reward_cols:
         clean_name = col.replace("rew_", "")
         ax0.plot(time, run_df[col], alpha=0.7, label=clean_name)
@@ -26,7 +26,7 @@ def plot_single_run_rewards(run_df: pd.DataFrame, save_dir: str, prefix: str = "
     
     # 2. Cumulative Return
     ax1 = plt.subplot(gs[1], sharex=ax0)
-    ax1.set_title("Cumulative Return (Episode Tally)", fontsize=14, fontweight="bold")
+    ax1.set_title("Cumulative Return (Episode Tally)", fontsize=16, fontweight="bold")
     for col in reward_cols:
         clean_name = col.replace("rew_", "")
         cum_rew = run_df[col].cumsum()
@@ -66,14 +66,14 @@ def plot_mc_reward_summary(all_runs_data: list, output_folder: str):
     
     # 1. Bar Chart (Average Contribution)
     sns.barplot(data=melted_df, x="Cumulative Total", y="Reward Component", 
-                ax=axes[0], estimator=np.mean, errorbar='sd', palette="viridis")
+                ax=axes[0], estimator=np.mean, errorbar='sd', palette="Blues_d")
     axes[0].set_title("Average Reward Contribution per Component", fontweight="bold")
     axes[0].set_xlabel("Average Cumulative Reward (with Std Dev)")
     axes[0].axvline(0, color='black', linewidth=1)
 
     # 2. Box Plot (Distribution across MC runs)
     sns.boxplot(data=melted_df, x="Cumulative Total", y="Reward Component", 
-                ax=axes[1], palette="viridis")
+                ax=axes[1], palette="Blues_d")
     sns.stripplot(data=melted_df, x="Cumulative Total", y="Reward Component", 
                   ax=axes[1], color="black", alpha=0.5, size=4)
     axes[1].set_title("Reward Distribution Across All Runs", fontweight="bold")

@@ -16,6 +16,9 @@ from resources import (
     max_range_penalty,
     approach_corridor_angle_deg,
     docking_port_boresight,
+    fuel_bonus_max,
+    fuel_bonus_baseline,
+    DV_AVAILABLE_INIT,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,26 +32,28 @@ class SparseEventData(Data):
         self,
         conjunction_angle_deg: Optional[float] = None,
         range_violated: bool = False,
+        dv_remaining: float = 0.0,
     ):
         self.conjunction_angle_deg = conjunction_angle_deg
         self.range_violated = range_violated
+        self.dv_remaining = dv_remaining
 
     def __add__(self, other: Data) -> "SparseEventData":
         if isinstance(other, SparseEventData):
-            return SparseEventData(other.conjunction_angle_deg, other.range_violated)
+            return SparseEventData(other.conjunction_angle_deg, other.range_violated, other.dv_remaining)
         return self
 
     def __repr__(self) -> str:
-        return f"SparseEventData(angle={self.conjunction_angle_deg}, range_viol={self.range_violated})"
+        return f"SparseEventData(angle={self.conjunction_angle_deg}, range_viol={self.range_violated}, dv_rem={self.dv_remaining:.1f})"
 
 
 class SparseEventDataStore(DataStore):
     data_type = SparseEventData
 
-    def get_log_state(self) -> Tuple[Optional[float], bool]:
-        """Returns (conjunction_angle_deg | None, range_exceeded)."""
+    def get_log_state(self) -> Tuple[Optional[float], bool, float]:
+        """Returns (conjunction_angle_deg | None, range_exceeded, dv_remaining)."""
         if "RSO" in self.satellite.name:
-            return (None, False)
+            return (None, False, 0.0)
 
         insp_dyn = self.satellite.dynamics
         rso_dyn = self.satellite.simulator.satellites[0].dynamics
@@ -74,12 +79,14 @@ class SparseEventDataStore(DataStore):
         max_range = self.satellite.sat_args.get("max_range_radius", 10_000)
         range_exceeded = bool(np.linalg.norm(rho) > max_range)
 
-        return (conjunction_angle, range_exceeded)
+        dv_remaining = float(getattr(self.satellite.fsw, "dv_available", 0.0))
+
+        return (conjunction_angle, range_exceeded, dv_remaining)
 
     def compare_log_states(self, old_state: Any, new_state: Any) -> SparseEventData:
         """Fire events only on the step they first occur (transition detection)."""
-        old_angle, old_range = old_state
-        new_angle, new_range = new_state
+        old_angle, old_range, _old_dv = old_state
+        new_angle, new_range, new_dv = new_state
 
         # Conjunction fires once: when it transitions from None → angle
         fire_conjunction = (new_angle is not None) and (old_angle is None)
@@ -89,6 +96,7 @@ class SparseEventDataStore(DataStore):
         return SparseEventData(
             conjunction_angle_deg=new_angle if fire_conjunction else None,
             range_violated=fire_range,
+            dv_remaining=new_dv,
         )
 
 
@@ -127,8 +135,16 @@ class SparseEventReward(GlobalReward):
                     alignment_mult = max(0.0, 1.0 - angle / 180.0)
                     scaled_reward = docking_reward * alignment_mult
                     r += scaled_reward
+
+                    # Fuel efficiency bonus — only on true docking (within corridor)
+                    fuel_bonus = 0.0
+                    if angle <= self.corridor_angle_deg and DV_AVAILABLE_INIT > fuel_bonus_baseline:
+                        fuel_frac = max(0.0, data.dv_remaining - fuel_bonus_baseline) / (DV_AVAILABLE_INIT - fuel_bonus_baseline)
+                        fuel_bonus = fuel_bonus_max * fuel_frac
+                        r += fuel_bonus
+
                     label = "DOCKING" if angle <= self.corridor_angle_deg else "CONJUNCTION"
-                    logger.info(f"{label}: angle={angle:.1f}° reward={scaled_reward:.2f}")
+                    logger.info(f"{label}: angle={angle:.1f}° reward={scaled_reward:.2f} fuel_bonus={fuel_bonus:.2f} dv_rem={data.dv_remaining:.1f}m/s")
 
             if data.range_violated:
                 r += max_range_penalty

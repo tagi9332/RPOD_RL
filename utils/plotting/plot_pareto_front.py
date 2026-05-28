@@ -86,15 +86,15 @@ def plot_pareto_front(all_runs_data, summary_df, output_folder):
             textcoords="offset points",
             xytext=(6, 4),
             ha='left',
-            fontsize=9,
+            fontsize=11,
             color='darkred',
             weight='bold'
         )
 
     # 6. Formatting
-    plt.title("Pareto Front: Docking Time vs. Fuel Consumption", fontsize=14, fontweight='bold')
-    plt.xlabel("Total Simulation Time (s)", fontsize=12)
-    plt.ylabel("Delta V Used (m/s)", fontsize=12)
+    plt.title("Pareto Front: Docking Time vs. Fuel Consumption", fontsize=16, fontweight='bold')
+    plt.xlabel("Total Simulation Time (s)", fontsize=14)
+    plt.ylabel("Delta V Used (m/s)", fontsize=14)
     plt.grid(True, linestyle='--', alpha=0.6, zorder=1)
     plt.legend()
     plt.tight_layout()

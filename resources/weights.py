@@ -1,5 +1,6 @@
 # ResourceReward
-dv_reward_weight=0.5
+dv_reward_weight=0.75
+
 dv_constant_penalty=0
 
 # RelativeRangeLogReward
@@ -21,13 +22,19 @@ approach_corridor_weight=0.05
 # Time Penalty — TOTAL penalty over a full episode (step-size independent integral form).
 # At t=T: cumulative = -time_penalty_weight.  At t=T/3: cumulative ≈ -time_penalty_weight*3.7%.
 # Set > expected dense-reward for a full loitering run (~55) to make coasting unprofitable.
-time_penalty_weight=40.0
+# time_penalty_weight=30.0
+time_penalty_weight=10
 
 # # Conjunction Penalty (Deprecated)
 conjunction_penalty=-20 
 
 # Illumination Reward
 illumination_weight=0.0025
+
+# Fuel Efficiency Bonus (applied at successful docking)
+# Scales from 0 at fuel_bonus_baseline m/s remaining up to fuel_bonus_max at full tank.
+fuel_bonus_max = 5
+fuel_bonus_baseline = 130.0  # m/s — expected floor; anything below earns nothing
 
 # WaypointPhaseReward
 # Same log-MSE formulation as RelativeRangeLogReward; replaces it entirely.

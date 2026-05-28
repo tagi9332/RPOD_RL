@@ -13,11 +13,11 @@ def plot_trajectory_analysis(df, output_folder="results"):
 
     # Layout: 2 Rows, 3 Columns (Using all 6 slots now)
     fig = plt.figure(figsize=(18, 10))
-    fig.suptitle(f"Mission & Trajectory Analysis (Steps: {len(df)})", fontsize=16)
+    fig.suptitle(f"Mission & Trajectory Analysis (Steps: {len(df)})", fontsize=18)
 
     # --- 1. In-Plane Motion (Hill Frame) ---
     ax1 = fig.add_subplot(2, 3, 1)
-    ax1.plot(df['hill_y'], df['hill_x'], label='Trajectory', color='blue')
+    ax1.plot(df['hill_y'], df['hill_x'], label='Trajectory', color='#2E86C1')
     ax1.scatter(0, 0, color='red', marker='*', s=150, label='Target (RSO)', zorder=5)
     ax1.scatter(df['hill_y'].iloc[0], df['hill_x'].iloc[0], color='green', s=100, label='Start', zorder=5)
     ax1.set_xlabel("Along-Track [m] (y)")
@@ -38,21 +38,21 @@ def plot_trajectory_analysis(df, output_folder="results"):
 
     # --- 3. Approach Metrics (Range/Vel) ---
     ax3 = fig.add_subplot(2, 3, 3)
-    ax3.plot(df['time_min'], df['range_mag'], label='Range [m]', color='steelblue')
-    ax3.set_ylabel("Range [m]", color='steelblue')
-    ax3.tick_params(axis='y', labelcolor='steelblue')
-    
+    ax3.plot(df['time_min'], df['range_mag'], label='Range [m]', color='#2E86C1')
+    ax3.set_ylabel("Range [m]", color='#2E86C1')
+    ax3.tick_params(axis='y', labelcolor='#2E86C1')
+
     ax3_twin = ax3.twinx()
-    ax3_twin.plot(df['time_min'], df['vel_mag'], label='Velocity [m/s]', color='darkorange', linestyle='--')
-    ax3_twin.set_ylabel("Velocity [m/s]", color='darkorange')
-    ax3_twin.tick_params(axis='y', labelcolor='darkorange')
+    ax3_twin.plot(df['time_min'], df['vel_mag'], label='Velocity [m/s]', color='#0A2342', linestyle='--')
+    ax3_twin.set_ylabel("Velocity [m/s]", color='#0A2342')
+    ax3_twin.tick_params(axis='y', labelcolor='#0A2342')
     ax3.set_xlabel("Time [min]")
     ax3.set_title("Approach Metrics")
     ax3.grid(True, alpha=0.3)
 
     # --- 4. Fuel Remaining ---
     ax4 = fig.add_subplot(2, 3, 4)
-    ax4.plot(df['time_min'], df['dV_remaining'], color='forestgreen', linewidth=2)
+    ax4.plot(df['time_min'], df['dV_remaining'], color='#1565A7', linewidth=2)
     ax4.set_xlabel("Time [min]")
     ax4.set_ylabel("Delta-V [m/s]")
     ax4.set_title("Fuel Remaining")
@@ -60,8 +60,8 @@ def plot_trajectory_analysis(df, output_folder="results"):
 
     # --- 5. Step Reward (Instantaneous) ---
     ax5 = fig.add_subplot(2, 3, 5)
-    ax5.plot(df['time_min'], df['reward'], color='purple', alpha=0.6, linewidth=1)
-    ax5.fill_between(df['time_min'], df['reward'], color='purple', alpha=0.1)
+    ax5.plot(df['time_min'], df['reward'], color='#0D5C8B', alpha=0.6, linewidth=1)
+    ax5.fill_between(df['time_min'], df['reward'], color='#0D5C8B', alpha=0.1)
     ax5.set_xlabel("Time [min]")
     ax5.set_ylabel("Reward")
     ax5.set_title("Instantaneous Step Reward")
@@ -70,7 +70,7 @@ def plot_trajectory_analysis(df, output_folder="results"):
     # --- 6. Cumulative Reward (Total Return) ---
     ax6 = fig.add_subplot(2, 3, 6)
     cumulative_reward = df['reward'].cumsum()
-    ax6.plot(df['time_min'], cumulative_reward, color='darkviolet', linewidth=2)
+    ax6.plot(df['time_min'], cumulative_reward, color='#0D5C8B', linewidth=2)
     ax6.set_xlabel("Time [min]")
     ax6.set_ylabel("Cumulative Reward")
     ax6.set_title("Total Episode Return")
@@ -94,7 +94,7 @@ def plot_control_analysis(df, output_folder="results"):
 
     # Layout: 4 Rows, 1 Column (Vertically Aligned Time Axis)
     fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
-    fig.suptitle(f"Attitude & Control Analysis", fontsize=16)
+    fig.suptitle(f"Attitude & Control Analysis", fontsize=18)
 
     ax0, ax1, ax2, ax3 = axes
 
@@ -119,13 +119,13 @@ def plot_control_analysis(df, output_folder="results"):
 
     if err_x and err_y and err_z:
         ax0_twin = ax0.twinx()
-        l2, = ax0_twin.plot(df['time_min'], df[err_x], label='$\sigma_{BR,1}$', color='red', alpha=0.8)
-        l3, = ax0_twin.plot(df['time_min'], df[err_y], label='$\sigma_{BR,2}$', color='green', alpha=0.8)
-        l4, = ax0_twin.plot(df['time_min'], df[err_z], label='$\sigma_{BR,3}$', color='blue', alpha=0.8)
-        ax0_twin.set_ylabel("Error MRP ($\sigma_{BR}$)")
-        
+        l2, = ax0_twin.plot(df['time_min'], df[err_x], label=r'$\sigma_{BR,1}$', color='#0A2342', alpha=0.8)
+        l3, = ax0_twin.plot(df['time_min'], df[err_y], label=r'$\sigma_{BR,2}$', color='#2E86C1', alpha=0.8)
+        l4, = ax0_twin.plot(df['time_min'], df[err_z], label=r'$\sigma_{BR,3}$', color='#5DADE2', alpha=0.8)
+        ax0_twin.set_ylabel(r"Error MRP ($\sigma_{BR}$)")
+
         lines_ax0.extend([l2, l3, l4])
-        labels_ax0.extend(['$\sigma_{BR,1}$', '$\sigma_{BR,2}$', '$\sigma_{BR,3}$'])
+        labels_ax0.extend([r'$\sigma_{BR,1}$', r'$\sigma_{BR,2}$', r'$\sigma_{BR,3}$'])
 
     if lines_ax0:
         ax0.legend(lines_ax0, labels_ax0, loc='upper right')
@@ -141,13 +141,13 @@ def plot_control_analysis(df, output_folder="results"):
     sig_z = 'sigma_BN_z' if 'sigma_BN_z' in df.columns else 'sigma_3'
     
     if sig_x in df.columns:
-        ax1.plot(df['time_min'], df[sig_x], label='$\sigma_1$', color='red')
-        ax1.plot(df['time_min'], df[sig_y], label='$\sigma_2$', color='green')
-        ax1.plot(df['time_min'], df[sig_z], label='$\sigma_3$', color='blue')
+        ax1.plot(df['time_min'], df[sig_x], label=r'$\sigma_1$', color='#0A2342')
+        ax1.plot(df['time_min'], df[sig_y], label=r'$\sigma_2$', color='#2E86C1')
+        ax1.plot(df['time_min'], df[sig_z], label=r'$\sigma_3$', color='#5DADE2')
     else:
         ax1.text(0.5, 0.5, "Attitude Data Not Found", ha='center', transform=ax1.transAxes)
         
-    ax1.set_ylabel("Inertial MRP ($\sigma_{BN}$)")
+    ax1.set_ylabel(r"Inertial MRP ($\sigma_{BN}$)")
     ax1.set_title("Inertial Attitude State")
     ax1.grid(True, alpha=0.5)
     ax1.legend(loc='upper right')
@@ -158,9 +158,9 @@ def plot_control_analysis(df, output_folder="results"):
     tq_z = 'torque_cmd_z' if 'torque_cmd_z' in df.columns else 'torque_z'
     
     if tq_x in df.columns:
-        ax2.plot(df['time_min'], df[tq_x], label='$u_x$', color='red', alpha=0.8)
-        ax2.plot(df['time_min'], df[tq_y], label='$u_y$', color='green', alpha=0.8)
-        ax2.plot(df['time_min'], df[tq_z], label='$u_z$', color='blue', alpha=0.8)
+        ax2.plot(df['time_min'], df[tq_x], label='$u_x$', color='#0A2342', alpha=0.8)
+        ax2.plot(df['time_min'], df[tq_y], label='$u_y$', color='#2E86C1', alpha=0.8)
+        ax2.plot(df['time_min'], df[tq_z], label='$u_z$', color='#5DADE2', alpha=0.8)
     else:
         ax2.text(0.5, 0.5, "Torque Data Not Found", ha='center', transform=ax2.transAxes)
         

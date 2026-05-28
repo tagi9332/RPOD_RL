@@ -1,5 +1,6 @@
 # Standard Imports
 import os
+import multiprocessing
 import numpy as np
 import pandas as pd
 from gymnasium.wrappers import FlattenObservation
@@ -50,6 +51,7 @@ from utils.plotting import (
     plot_distance_history,
     plot_dv_vs_distance,
     plot_reward_heatmap,
+    plot_sun_angle_vs_distance,
     vizard_output,
     plot_impulse_histogram,
     plot_impulse_timeseries,
@@ -125,7 +127,28 @@ class InferenceEnv(Sb3BksEnv):
             self._waypoint_capture_dist = dist_to_waypoint
 
         # ----------------------------------------------------------------------------
-        # METRIC 2: Approach Angle (Inspector's position relative to RSO's docking port)
+        # METRIC 2: Sun Angle (angle between inspector→RSO and inspector→Sun vectors)
+        # ----------------------------------------------------------------------------
+        try:
+            world = self.env.simulator.world
+            sun_msg = world.gravFactory.spiceObject.planetStateOutMsgs[world.sun_index].read()
+            r_sun_N = np.array(sun_msg.PositionVector)
+            r_insp_to_rso = rso_r_N - insp_r_N
+            r_insp_to_sun = r_sun_N - insp_r_N
+            dist_rso = np.linalg.norm(r_insp_to_rso)
+            dist_sun = np.linalg.norm(r_insp_to_sun)
+            if dist_rso > 1e-6 and dist_sun > 1e-6:
+                rho_hat = r_insp_to_rso / dist_rso
+                sun_hat = r_insp_to_sun / dist_sun
+                cos_sun = np.clip(np.dot(rho_hat, sun_hat), -1.0, 1.0)
+                sun_angle_deg = float(np.degrees(np.arccos(cos_sun)))
+            else:
+                sun_angle_deg = 0.0
+        except Exception:
+            sun_angle_deg = 0.0
+
+        # ----------------------------------------------------------------------------
+        # METRIC 3: Approach Angle (Inspector's position relative to RSO's docking port)
         # ----------------------------------------------------------------------------
         # Standoff waypoint in Hill frame (body-z boresight * 30m, rotated to Hill)
         dcm_HN = np.array(rso.dynamics.HN)
@@ -158,6 +181,7 @@ class InferenceEnv(Sb3BksEnv):
 
             # Attitude Metrics
             info["metrics"]["approach_angle_deg"] = approach_angle_deg
+            info["metrics"]["sun_angle_deg"] = sun_angle_deg
             info["metrics"]["pointing_error"] = pointing_error_rad
             info["metrics"]["rso_sigma_BN"] = rso_sigma_BN
             info["metrics"]["r_waypoint_H"] = r_waypoint_H
@@ -217,73 +241,71 @@ def enable_eval_reward_telemetry(env):
 
             rew_obj.calculate_reward = create_patched_method(rew_obj, rew_obj.calculate_reward)
 
-def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
+
+def _run_chunk(args):
+    """Worker: creates its own env+model and runs a chunk of episodes."""
+    run_indices, model_path, output_folder = args
+
+    bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
+
     scenario = scene.SphericalRSO(n_points=100, radius=1.0, theta_max=np.radians(30), range_max=250, theta_solar_max=np.radians(60))
-    
     rewarders = get_rewarders()
 
-    print("Initializing Environment...")
     env = ConstellationTasking(
         satellites=[RSOSat("RSO", sat_args=rso_sat_args), InspectorSat("Inspector", sat_args=inspector_sat_args)],
-        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="random"), 
-        scenario=scenario, 
-        rewarder=rewarders, 
-        time_limit=SIM_TIME, 
-        sim_rate=SIM_DT, 
+        sat_arg_randomizer=sat_arg_randomizer(mode="train", rso_att_type="random"),
+        scenario=scenario,
+        rewarder=rewarders,
+        time_limit=SIM_TIME,
+        sim_rate=SIM_DT,
         log_level="WARNING"
     )
-
     enable_eval_reward_telemetry(env)
 
-    # 1. Create a specific helper function to instantiate the wrapped environment
     def make_env():
         base_env = InferenceEnv(env)
         return FlattenObservation(base_env)
 
-    # 2. Pass the function pointer directly to DummyVecEnv
     env_sb3 = DummyVecEnv([make_env])
 
     try:
         model = PPO.load(model_path, device="cpu")
     except FileNotFoundError:
-        print(f"ERROR: Model not found at {model_path}")
-        return None, None
+        print(f"[PID {os.getpid()}] ERROR: Model not found at {model_path}")
+        return []
 
-    all_runs_data = [] 
-    summary_stats = [] 
+    chunk_results = []
 
-    for run_idx in range(num_runs):
-        print(f"--- Executing Run {run_idx + 1}/{num_runs} ---")
-        # DummyVecEnv only returns the observation, no info dict!
+    for run_idx in run_indices:
+        print(f"[PID {os.getpid()}] --- Executing Run {run_idx + 1} ---")
         obs = env_sb3.reset()
 
-       # Create Vizard output
         vizard_output(env, output_folder, run_idx)
-            
+
         done = False
-        run_data_log = [] 
+        run_data_log = []
         total_reward = 0.0
 
         while not done:
             action, _ = model.predict(obs, deterministic=True)
             step_result = env_sb3.step(action)
-            
+
             if len(step_result) == 4:
                 obs, reward, done_array, info_array = step_result
                 done = done_array[0]
                 info = info_array[0]
-                reward = reward[0] 
+                reward = reward[0]
             else:
                 obs, reward, terminated, truncated, info = step_result
                 done = terminated or truncated
-            
+
             total_reward += reward
 
             if "metrics" in info:
                 metrics = info["metrics"]
-                flat_metrics = {"run_id": run_idx + 1} 
-                flat_metrics["reward"] = reward  # Ensure step reward is logged
-                
+                flat_metrics = {"run_id": run_idx + 1}
+                flat_metrics["reward"] = reward
+
                 for k, v in metrics.items():
                     key_name = "hill" if k == "r_DC_Hc" else k
                     if isinstance(v, (np.ndarray, list)) and len(v) == 3:
@@ -292,31 +314,28 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
                         flat_metrics[f"{key_name}_z"] = v[2]
                     else:
                         flat_metrics[key_name] = v
-                        
+
                 run_data_log.append(flat_metrics)
 
         run_df = pd.DataFrame(run_data_log)
-        all_runs_data.append(run_df)
-        
+
         total_sim_time = run_df["sim_time"].max() if "sim_time" in run_df.columns else 0.0
         final_dist = np.linalg.norm([run_df.iloc[-1]["hill_x"], run_df.iloc[-1]["hill_y"], run_df.iloc[-1]["hill_z"]])
-        
-        # --- NEW SUCCESS LOGIC ---
+
         conjunction = bool(run_df.iloc[-1].get("docked_state", False))
         final_angle = run_df.iloc[-1].get("approach_angle_deg", 180.0)
-        
-        # Success is strictly a conjunction WITHIN the cone limit
+
         success = conjunction and (final_angle <= approach_corridor_angle_deg)
-        
-        if success: 
+
+        if success:
             end_status = f"Docked ({final_angle:.1f}°)"
-        elif conjunction: 
+        elif conjunction:
             end_status = f"Collision ({final_angle:.1f}°)"
         elif total_sim_time >= SIM_TIME * 0.99:
             end_status = "Timeout"
-        else: 
+        else:
             end_status = "Fuel Exhausted / Bounds Viol."
-        # --- WAYPOINT CAPTURE STATS ---
+
         if "waypoint_captured" in run_df.columns:
             wp_captured = bool(run_df["waypoint_captured"].max())
             if wp_captured and "waypoint_capture_dist" in run_df.columns:
@@ -328,12 +347,36 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
             wp_captured = False
             wp_capture_dist = np.nan
 
-        summary_stats.append({
+        summary = {
             "run_id": run_idx + 1, "total_reward": total_reward, "episode_length": len(run_df),
             "total_sim_time": total_sim_time, "end_status": end_status, "success": success,
             "final_distance": final_dist, "waypoint_captured": wp_captured,
             "waypoint_capture_dist": wp_capture_dist,
-        })
+        }
+
+        chunk_results.append((run_df, summary))
+
+    return chunk_results
+
+
+def run_monte_carlo_inference(model_path: str, output_folder: str, num_runs: int = 30, num_workers: int = 14) -> tuple[list, pd.DataFrame]:
+    # Distribute run indices round-robin across workers for even load balancing
+    all_indices = list(range(num_runs))
+    actual_workers = min(num_workers, num_runs)
+    chunks = [all_indices[i::actual_workers] for i in range(actual_workers)]
+    args = [(chunk, model_path, output_folder) for chunk in chunks]
+
+    print(f"Running {num_runs} simulations across {actual_workers} workers...")
+
+    with multiprocessing.Pool(processes=actual_workers) as pool:
+        chunk_results_list = pool.map(_run_chunk, args)
+
+    # Flatten and sort by run_id to restore original ordering
+    all_results = [item for chunk in chunk_results_list for item in chunk]
+    all_results.sort(key=lambda x: x[1]["run_id"])
+
+    all_runs_data = [r[0] for r in all_results]
+    summary_stats = [r[1] for r in all_results]
 
     print("\n=== Monte Carlo Summary ===")
     summary_df = pd.DataFrame(summary_stats)
@@ -345,7 +388,7 @@ def run_monte_carlo_inference(model_path, output_folder, num_runs=30):
     mean_wp_dist = summary_df['waypoint_capture_dist'].dropna().mean()
     if not np.isnan(mean_wp_dist):
         print(f"Mean Waypoint Capture Distance from Center: {mean_wp_dist:.2f}m")
-    
+
     summary_df.to_csv(os.path.join(output_folder, "mc_summary_stats.csv"), index=False)
     pd.concat(all_runs_data, ignore_index=True).to_csv(os.path.join(output_folder, "mc_all_runs_data.csv"), index=False)
 
@@ -356,10 +399,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-25_07-17-32\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-05-27_20-41-42\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=100)
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=500, num_workers=14)
 
     raw_runs_data = all_runs_data  # keep raw per-step data for impulse analysis
     if all_runs_data:
@@ -381,6 +424,7 @@ if __name__ == "__main__":
         plot_distance_history(all_runs_data, summary_df, output_folder)
         plot_dv_vs_distance(all_runs_data, summary_df, output_folder)
         plot_reward_heatmap(all_runs_data, summary_df, output_folder)
+        plot_sun_angle_vs_distance(all_runs_data, summary_df, output_folder)
         plot_impulse_histogram(raw_runs_data, summary_df, output_folder)
         plot_mean_impulse_history(raw_runs_data, summary_df, output_folder)
 

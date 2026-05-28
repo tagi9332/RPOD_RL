@@ -162,11 +162,13 @@ class Sb3BksEnv(gym.Env):
             elif isinstance(r, DeltaVReward):
                 self._dv_rewarder = r
 
-        # Cache reference to the inspector's ImpulsiveThrustHill action
+        # Cache reference to the inspector's ImpulsiveThrustHill action.
+        # Must use sat.action_builder.action_spec (the deep copy used at runtime),
+        # NOT sat.action_spec (the class-level template that ActionBuilder copies from).
         self._impulsive_thrust_action: ImpulsiveThrustHill | None = None
         for sat in env.satellites:
             if "Inspector" in sat.name:
-                for action in getattr(sat, "action_spec", []):
+                for action in getattr(sat.action_builder, "action_spec", []):
                     if isinstance(action, ImpulsiveThrustHill):
                         self._impulsive_thrust_action = action
                         break

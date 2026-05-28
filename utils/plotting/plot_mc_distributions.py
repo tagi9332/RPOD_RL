@@ -43,7 +43,7 @@ def plot_mc_distributions(all_runs_data, summary_df, output_folder):
         ("total_reward",   "Total Reward",                "total_reward"),
     ]
 
-    colors = ['#4C72B0', '#DD8452', '#55A868', '#C44E52']
+    colors = ['#D95319', '#0072BD', '#77AC30', '#A2142F']
 
     for i, (col, ylabel, file_tag) in enumerate(metrics):
         color = colors[i]
@@ -69,8 +69,8 @@ def plot_mc_distributions(all_runs_data, summary_df, output_folder):
         # Scatter
         ax_scatter.scatter(x, y, color=color, alpha=0.7, edgecolor='none', s=18, zorder=3)
         ax_scatter.axhline(mean_val,           color='black',  linestyle='-',  linewidth=1.5, label='Mean', zorder=4)
-        ax_scatter.axhline(mean_val + std_val, color='orange', linestyle='--', linewidth=1.2, label='±1σ',  zorder=4)
-        ax_scatter.axhline(mean_val - std_val, color='orange', linestyle='--', linewidth=1.2,               zorder=4)
+        ax_scatter.axhline(mean_val + std_val, color='#FFD700', linestyle='--', linewidth=1.2, label='±1σ',  zorder=4)
+        ax_scatter.axhline(mean_val - std_val, color='#FFD700', linestyle='--', linewidth=1.2,               zorder=4)
 
         # Stats annotation box
         stats_text = (
@@ -83,29 +83,29 @@ def plot_mc_distributions(all_runs_data, summary_df, output_folder):
         ax_scatter.text(
             0.02, 0.97, stats_text,
             transform=ax_scatter.transAxes,
-            fontsize=9, verticalalignment='top',
+            fontsize=11, verticalalignment='top',
             bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='gray', alpha=0.85)
         )
 
         ax_scatter.legend(loc='upper center', bbox_to_anchor=(0.5, -0.14),
-                          fontsize='small', frameon=True, ncol=2)
-        ax_scatter.set_xlabel("Monte Carlo Run ID", fontsize=11)
-        ax_scatter.set_ylabel(ylabel, fontsize=11, fontweight='bold')
+                          fontsize='medium', frameon=True, ncol=2)
+        ax_scatter.set_xlabel("Monte Carlo Run ID", fontsize=13)
+        ax_scatter.set_ylabel(ylabel, fontsize=13, fontweight='bold')
         ax_scatter.grid(True, linestyle='--', alpha=0.6)
 
         # Horizontal histogram
         ax_hist.hist(y, bins=15, orientation='horizontal', color=color, alpha=0.7, edgecolor='k', zorder=3)
         ax_hist.axhline(mean_val,           color='black',  linestyle='-',  linewidth=1.5, zorder=4)
-        ax_hist.axhline(mean_val + std_val, color='orange', linestyle='--', linewidth=1.2, zorder=4)
-        ax_hist.axhline(mean_val - std_val, color='orange', linestyle='--', linewidth=1.2, zorder=4)
-        ax_hist.set_xlabel("Count", fontsize=11)
+        ax_hist.axhline(mean_val + std_val, color='#FFD700', linestyle='--', linewidth=1.2, zorder=4)
+        ax_hist.axhline(mean_val - std_val, color='#FFD700', linestyle='--', linewidth=1.2, zorder=4)
+        ax_hist.set_xlabel("Count", fontsize=13)
         ax_hist.tick_params(labelleft=False)
         ax_hist.grid(True, linestyle='--', alpha=0.6)
 
         success_pct = 100.0 * success_mask.sum() / len(plot_df) if len(plot_df) > 0 else 0.0
         fig.suptitle(
             f"{ylabel}  —  Successful Runs ({success_mask.sum()}/{len(plot_df)})",
-            fontsize=13, fontweight='bold', y=1.01
+            fontsize=15, fontweight='bold', y=1.01
         )
 
         plot_path = os.path.join(output_folder, f'mc_dist_{file_tag}.png')

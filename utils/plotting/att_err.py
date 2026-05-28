@@ -29,7 +29,7 @@ for error in error_levels:
     # Add a label to each circle 
     # (Placed at the top of each circle with a white background for readability)
     ax.text(0, error, f' {error}° ', color='midnightblue', 
-            ha='center', va='center', fontsize=10, fontweight='bold',
+            ha='center', va='center', fontsize=12, fontweight='bold',
             bbox=dict(facecolor='white', edgecolor='none', pad=2, alpha=0.8))
 
 # 4. Plot the center point (Boresight / 0 error)

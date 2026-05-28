@@ -14,7 +14,7 @@ def plot_summary_table(summary_df, output_folder):
     
     table = ax.table(cellText=display_df.values, colLabels=["Run ID", "Final Reward", "Total Sim Time", "End Condition", "Success"], loc='center', cellLoc='center')
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    table.set_fontsize(12)
     table.scale(1.0, 1.5) 
     
     for (row, col), cell in table.get_celld().items():
@@ -22,7 +22,7 @@ def plot_summary_table(summary_df, output_folder):
             cell.set_text_props(weight='bold', color='white')
             cell.set_facecolor('#4C72B0')
 
-    plt.title("Monte Carlo Results Summary", fontsize=16, fontweight='bold', pad=20)
+    plt.title("Monte Carlo Results Summary", fontsize=18, fontweight='bold', pad=20)
     plot_path = os.path.join(output_folder, 'mc_results_table.png')
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()

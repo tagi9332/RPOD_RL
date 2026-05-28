@@ -35,10 +35,11 @@ class LinearParameterScheduler(BaseCallback):
     _log_key: str = ""
     _kwarg_name: str = ""
 
-    def __init__(self, initial: float, final: float, verbose: int = 0):
+    def __init__(self, initial: float, final: float, eval_env=None, verbose: int = 0):
         super().__init__(verbose)
         self.initial = initial
         self.final = final
+        self.eval_env = eval_env
 
     def _current_value(self) -> float:
         total_steps = self.locals.get("total_timesteps", 1)
@@ -48,6 +49,8 @@ class LinearParameterScheduler(BaseCallback):
     def _on_step(self) -> bool:
         value = self._current_value()
         self.training_env.env_method("set_scheduled_parameters", **{self._kwarg_name: value})
+        if self.eval_env is not None:
+            self.eval_env.env_method("set_scheduled_parameters", **{self._kwarg_name: value})
         self.logger.record(self._log_key, value)
         return True
 
@@ -61,8 +64,8 @@ class ConjunctionRadiusScheduler(LinearParameterScheduler):
     _log_key = "curriculum/conjunction_radius"
     _kwarg_name = "conjunction_radius"
 
-    def __init__(self, initial_radius: float = 200.0, final_radius: float = 10.0, verbose: int = 0):
-        super().__init__(initial=initial_radius, final=final_radius, verbose=verbose)
+    def __init__(self, initial_radius: float = 200.0, final_radius: float = 10.0, eval_env=None, verbose: int = 0):
+        super().__init__(initial=initial_radius, final=final_radius, eval_env=eval_env, verbose=verbose)
 
 
 class CorridorAngleScheduler(LinearParameterScheduler):
@@ -76,8 +79,8 @@ class CorridorAngleScheduler(LinearParameterScheduler):
     _log_key = "curriculum/corridor_angle_deg"
     _kwarg_name = "corridor_angle_deg"
 
-    def __init__(self, initial_angle_deg: float = 360.0, final_angle_deg: float = 30.0, verbose: int = 0):
-        super().__init__(initial=initial_angle_deg, final=final_angle_deg, verbose=verbose)
+    def __init__(self, initial_angle_deg: float = 360.0, final_angle_deg: float = 30.0, eval_env=None, verbose: int = 0):
+        super().__init__(initial=initial_angle_deg, final=final_angle_deg, eval_env=eval_env, verbose=verbose)
 
 
 class AttitudeErrorScheduler(LinearParameterScheduler):
@@ -92,8 +95,8 @@ class AttitudeErrorScheduler(LinearParameterScheduler):
     _log_key = "curriculum/rso_max_error_deg"
     _kwarg_name = "max_error_deg"
 
-    def __init__(self, initial_error_deg: float = 90.0, final_error_deg: float = 5.0, verbose: int = 0):
-        super().__init__(initial=initial_error_deg, final=final_error_deg, verbose=verbose)
+    def __init__(self, initial_error_deg: float = 90.0, final_error_deg: float = 5.0, eval_env=None, verbose: int = 0):
+        super().__init__(initial=initial_error_deg, final=final_error_deg, eval_env=eval_env, verbose=verbose)
 
 
 class DeltaVPenaltyScheduler(LinearParameterScheduler):
@@ -109,8 +112,8 @@ class DeltaVPenaltyScheduler(LinearParameterScheduler):
     _log_key = "curriculum/dv_penalty_weight"
     _kwarg_name = "dv_penalty_weight"
 
-    def __init__(self, initial_weight: float = 0.0, final_weight: float = 0.45, verbose: int = 0):
-        super().__init__(initial=initial_weight, final=final_weight, verbose=verbose)
+    def __init__(self, initial_weight: float = 0.0, final_weight: float = 0.45, eval_env=None, verbose: int = 0):
+        super().__init__(initial=initial_weight, final=final_weight, eval_env=eval_env, verbose=verbose)
 
 
 class MaxDriftDurationScheduler(LinearParameterScheduler):
@@ -125,8 +128,8 @@ class MaxDriftDurationScheduler(LinearParameterScheduler):
     _log_key = "curriculum/max_drift_duration"
     _kwarg_name = "max_drift_duration"
 
-    def __init__(self, initial_duration: float = 30.0, final_duration: float = 120.0, verbose: int = 0):
-        super().__init__(initial=initial_duration, final=final_duration, verbose=verbose)
+    def __init__(self, initial_duration: float = 30.0, final_duration: float = 120.0, eval_env=None, verbose: int = 0):
+        super().__init__(initial=initial_duration, final=final_duration, eval_env=eval_env, verbose=verbose)
 
 
 class MaxDVScheduler(LinearParameterScheduler):
@@ -141,5 +144,5 @@ class MaxDVScheduler(LinearParameterScheduler):
     _log_key = "curriculum/max_dv"
     _kwarg_name = "max_dv"
 
-    def __init__(self, initial_dv: float = 2.0, final_dv: float = 0.5, verbose: int = 0):
-        super().__init__(initial=initial_dv, final=final_dv, verbose=verbose)
+    def __init__(self, initial_dv: float = 2.0, final_dv: float = 0.5, eval_env=None, verbose: int = 0):
+        super().__init__(initial=initial_dv, final=final_dv, eval_env=eval_env, verbose=verbose)

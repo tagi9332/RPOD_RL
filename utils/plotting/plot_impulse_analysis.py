@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 _COLORS = {
-    'best':  '#55A868',
-    'worst': '#C44E52',
-    'mean':  '#4C72B0',
+    'best':  '#1565A7',
+    'worst': '#0A2342',
+    'mean':  '#2E86C1',
 }
 
 
@@ -67,9 +67,9 @@ def plot_impulse_histogram(all_runs_data, summary_df, output_folder):
     mean_val   = np.mean(nonzero)
     median_val = np.median(nonzero)
 
-    ax.axvline(mean_val,   color='red',    linestyle='--', linewidth=1.8,
+    ax.axvline(mean_val,   color='#0A2342', linestyle='--', linewidth=1.8,
                label=f'Mean   = {mean_val:.4g} m/s', zorder=4)
-    ax.axvline(median_val, color='orange', linestyle=':',  linewidth=1.8,
+    ax.axvline(median_val, color='#5DADE2', linestyle=':',  linewidth=1.8,
                label=f'Median = {median_val:.4g} m/s', zorder=4)
 
     stats_text = (
@@ -82,19 +82,19 @@ def plot_impulse_histogram(all_runs_data, summary_df, output_folder):
         f"max    = {nonzero.max():.4g} m/s"
     )
     ax.text(0.97, 0.97, stats_text,
-            transform=ax.transAxes, fontsize=9,
+            transform=ax.transAxes, fontsize=11,
             verticalalignment='top', horizontalalignment='right',
             bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
                       edgecolor='gray', alpha=0.88))
 
-    ax.set_xlabel('ΔV Impulse per Timestep (m/s)', fontsize=12)
-    ax.set_ylabel('Count', fontsize=12)
+    ax.set_xlabel('ΔV Impulse per Timestep (m/s)', fontsize=14)
+    ax.set_ylabel('Count', fontsize=14)
     ax.set_title(
         f'Commanded ΔV Impulse Distribution  '
         f'(all MC runs, non-zero steps only,  n = {len(nonzero):,})',
-        fontsize=13, fontweight='bold'
+        fontsize=15, fontweight='bold'
     )
-    ax.legend(fontsize=10)
+    ax.legend(fontsize=12)
     ax.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
 
@@ -122,7 +122,7 @@ def plot_impulse_timeseries(best_run_df, worst_run_df, output_folder):
         times, impulses = _compute_dv_impulses(run_df)
         if times is None or len(times) == 0:
             ax.text(0.5, 0.5, 'No dV data', transform=ax.transAxes, ha='center')
-            ax.set_title(label, fontsize=12, fontweight='bold')
+            ax.set_title(label, fontsize=14, fontweight='bold')
             continue
 
         dt = float(np.median(np.diff(times))) if len(times) > 1 else 1.0
@@ -140,21 +140,21 @@ def plot_impulse_timeseries(best_run_df, worst_run_df, output_folder):
             f"Total ΔV = {total_dv:.3f} m/s\n"
             f"Thrusting = {thrust_frac:.1f}% of steps"
         )
-        ax.text(0.01, 0.97, info_text, transform=ax.transAxes, fontsize=9,
+        ax.text(0.01, 0.97, info_text, transform=ax.transAxes, fontsize=11,
                 verticalalignment='top',
                 bbox=dict(boxstyle='round,pad=0.35', facecolor='white',
                           edgecolor='gray', alpha=0.85))
 
-        ax.set_ylabel('ΔV Impulse (m/s)', fontsize=11)
-        ax.set_title(label, fontsize=12, fontweight='bold')
-        ax.legend(fontsize=9, loc='upper right')
+        ax.set_ylabel('ΔV Impulse (m/s)', fontsize=13)
+        ax.set_title(label, fontsize=14, fontweight='bold')
+        ax.legend(fontsize=11, loc='upper right')
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
         ax.grid(True, linestyle='--', alpha=0.5)
 
-    axes[-1].set_xlabel('Simulation Time (s)', fontsize=12)
+    axes[-1].set_xlabel('Simulation Time (s)', fontsize=14)
     fig.suptitle('Per-Timestep ΔV Impulse: Best vs. Worst Run',
-                 fontsize=14, fontweight='bold')
+                 fontsize=16, fontweight='bold')
     plt.tight_layout()
 
     save_path = os.path.join(output_folder, 'dv_impulse_timeseries.png')
@@ -227,15 +227,15 @@ def plot_mean_impulse_history(all_runs_data, summary_df, output_folder, n_bins=8
     ax.axhline(overall_mean, color='black', linestyle='--', linewidth=1.4,
                label=f'Grand mean = {overall_mean:.4g} m/s', zorder=4)
 
-    ax.set_xlabel('Simulation Time (s)', fontsize=12)
-    ax.set_ylabel('Mean ΔV Impulse (m/s)', fontsize=12)
+    ax.set_xlabel('Simulation Time (s)', fontsize=14)
+    ax.set_ylabel('Mean ΔV Impulse (m/s)', fontsize=14)
     ax.set_title(
         'Mean Commanded ΔV Impulse per Timestep over Simulation Time  (All MC Runs)',
-        fontsize=13, fontweight='bold'
+        fontsize=15, fontweight='bold'
     )
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
-    ax.legend(fontsize=10)
+    ax.legend(fontsize=12)
     ax.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
 

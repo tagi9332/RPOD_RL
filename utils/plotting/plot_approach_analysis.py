@@ -6,19 +6,34 @@ import matplotlib.gridspec as gridspec
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
+from resources.sim_parameters import (
+    sun_illumination_cone_angle_deg as _SUN_CONE_DEG,
+    illumination_cutoff_range as _ILLUM_CUTOFF,
+)
+
 # Mission-geometry constants (mirrors resources/sim_parameters.py)
 _STANDOFF_DIST = 30.0
 _CONJUNCTION_R = 5.0
 _WAYPOINT_R    = 10.0
 _CORRIDOR_DEG  = 30.0
 
-# Colour palette consistent with other plotting scripts
+# Abyss blue shades
+_ML = {
+    'darkest':  '#0A2342',
+    'dark':     '#0D5C8B',
+    'mid_dark': '#1565A7',
+    'medium':   '#2E86C1',
+    'light':    '#5DADE2',
+    'lightest': '#85C1E9',
+}
+
+# Outcome colours — success/fail kept as-is per user preference
 _C = {
     'success':   '#55A868',
-    'collision': '#DD8452',
+    'collision': '#EF553B',
     'timeout':   '#9E9E9E',
-    'fuel':      '#8172B3',
-    'other':     '#C44E52',
+    'fuel':      '#0D5C8B',
+    'other':     '#EF553B',
 }
 _CATEGORY_ORDER  = ['Docked', 'Collision', 'Timeout', 'Fuel / Bounds']
 _CATEGORY_COLORS = [_C['success'], _C['collision'], _C['timeout'], _C['fuel']]
@@ -93,18 +108,18 @@ def plot_vr_diagram(all_runs_data, summary_df, output_folder):
 
     # Reference velocity gates (v = r / T_stop)
     r_ref = np.linspace(1.0, 2200.0, 500)
-    ax.plot(r_ref, r_ref / 1800, color='navy', linestyle='--', linewidth=1.8,
+    ax.plot(r_ref, r_ref / 1800, color=_ML['medium'], linestyle='--', linewidth=1.8,
             label='Gate  v = r / 1800 s  (30-min stop)', zorder=4)
-    ax.plot(r_ref, r_ref / 600,  color='firebrick', linestyle=':', linewidth=1.8,
+    ax.plot(r_ref, r_ref / 600,  color=_ML['darkest'], linestyle=':', linewidth=1.8,
             label='Gate  v = r / 600 s  (10-min stop)',  zorder=4)
 
-    ax.set_xlabel('Separation Distance (m)', fontsize=12)
-    ax.set_ylabel('Relative Speed (m/s)', fontsize=12)
-    ax.set_title('Velocity–Range (V-R) Diagram', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Separation Distance (m)', fontsize=14)
+    ax.set_ylabel('Relative Speed (m/s)', fontsize=14)
+    ax.set_title('Velocity–Range (V-R) Diagram', fontsize=16, fontweight='bold')
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend(fontsize=9, loc='upper left')
+    ax.legend(fontsize=11, loc='upper left')
     plt.tight_layout()
 
     save_path = os.path.join(output_folder, 'vr_diagram.png')
@@ -149,13 +164,13 @@ def plot_approach_angle_history(all_runs_data, summary_df, output_folder,
                label=f'Corridor limit ({corridor_angle_deg:.0f}°)', zorder=5)
     ax.axhspan(corridor_angle_deg, 180, alpha=0.07, color='red', zorder=1)
 
-    ax.set_xlabel('Normalised Episode Time', fontsize=12)
-    ax.set_ylabel('Approach Angle (deg)', fontsize=12)
+    ax.set_xlabel('Normalised Episode Time', fontsize=14)
+    ax.set_ylabel('Approach Angle (deg)', fontsize=14)
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0, 185)
-    ax.set_title('Approach Angle History  (All MC Runs)', fontsize=14, fontweight='bold')
+    ax.set_title('Approach Angle History  (All MC Runs)', fontsize=16, fontweight='bold')
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend(fontsize=9, loc='upper right')
+    ax.legend(fontsize=11, loc='upper right')
     plt.tight_layout()
 
     save_path = os.path.join(output_folder, 'approach_angle_history.png')
@@ -208,25 +223,25 @@ def plot_initial_condition_scatter(all_runs_data, summary_df, output_folder):
         ax.grid(True, linestyle='--', alpha=0.5)
         ax.set_aspect('equal')
 
-    ax_xy.set_xlabel('Hill X / Radial (m)',    fontsize=11)
-    ax_xy.set_ylabel('Hill Y / In-Track (m)',   fontsize=11)
-    ax_xy.set_title('R–I Plane (X-Y)',          fontsize=12, fontweight='bold')
+    ax_xy.set_xlabel('Hill X / Radial (m)',    fontsize=13)
+    ax_xy.set_ylabel('Hill Y / In-Track (m)',   fontsize=13)
+    ax_xy.set_title('R–I Plane (X-Y)',          fontsize=14, fontweight='bold')
 
-    ax_xz.set_xlabel('Hill X / Radial (m)',     fontsize=11)
-    ax_xz.set_ylabel('Hill Z / Cross-Track (m)', fontsize=11)
-    ax_xz.set_title('R–C Plane (X-Z)',           fontsize=12, fontweight='bold')
+    ax_xz.set_xlabel('Hill X / Radial (m)',     fontsize=13)
+    ax_xz.set_ylabel('Hill Z / Cross-Track (m)', fontsize=13)
+    ax_xz.set_title('R–C Plane (X-Z)',           fontsize=14, fontweight='bold')
 
-    ax_yz.set_xlabel('Hill Y / In-Track (m)',    fontsize=11)
-    ax_yz.set_ylabel('Hill Z / Cross-Track (m)', fontsize=11)
-    ax_yz.set_title('I–C Plane (Y-Z)',           fontsize=12, fontweight='bold')
+    ax_yz.set_xlabel('Hill Y / In-Track (m)',    fontsize=13)
+    ax_yz.set_ylabel('Hill Z / Cross-Track (m)', fontsize=13)
+    ax_yz.set_title('I–C Plane (Y-Z)',           fontsize=14, fontweight='bold')
 
     legend_handles.append(
         Line2D([0], [0], marker='*', color='black', markersize=11,
                linestyle='None', label='RSO (Origin)')
     )
     fig.legend(handles=legend_handles, loc='lower center', ncol=len(legend_handles),
-               fontsize=10, bbox_to_anchor=(0.5, -0.04), frameon=True)
-    fig.suptitle('Initial Condition Coverage  (Hill Frame)', fontsize=15, fontweight='bold')
+               fontsize=12, bbox_to_anchor=(0.5, -0.04), frameon=True)
+    fig.suptitle('Initial Condition Coverage  (Hill Frame)', fontsize=17, fontweight='bold')
     plt.tight_layout(rect=[0, 0.06, 1, 0.96])
 
     save_path = os.path.join(output_folder, 'initial_condition_scatter.png')
@@ -257,12 +272,12 @@ def plot_failure_mode_breakdown(summary_df, output_folder):
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.3,
             f'{cnt}\n({pct:.1f}%)',
-            ha='center', va='bottom', fontsize=11, fontweight='bold',
+            ha='center', va='bottom', fontsize=13, fontweight='bold',
         )
 
-    ax.set_ylabel('Count', fontsize=12)
+    ax.set_ylabel('Count', fontsize=14)
     ax.set_ylim(0, (max(counts) if counts else 1) * 1.30)
-    ax.set_title(f'Episode Outcome Breakdown  (n = {n_total})', fontsize=14, fontweight='bold')
+    ax.set_title(f'Episode Outcome Breakdown  (n = {n_total})', fontsize=16, fontweight='bold')
     ax.grid(True, linestyle='--', alpha=0.5, axis='y')
     plt.tight_layout()
 
@@ -301,19 +316,16 @@ def plot_distance_history(all_runs_data, summary_df, output_folder,
         ax.plot(run_df['sim_time'].values, _separation(run_df).values,
                 color=color, alpha=alpha, linewidth=0.8, label=lbl, zorder=2)
 
-    ax.axhline(standoff_dist, color='steelblue', linestyle='--', linewidth=1.8,
+    ax.axhline(standoff_dist, color=_ML['medium'], linestyle='--', linewidth=1.8,
                label=f'Standoff / Waypoint  ({standoff_dist:.0f} m)', zorder=4)
-    ax.axhline(conjunction_r, color='firebrick', linestyle='--', linewidth=1.8,
-               label=f'Conjunction Radius  ({conjunction_r:.0f} m)', zorder=4)
-    ax.axhspan(0, conjunction_r, alpha=0.07, color='red', zorder=1)
 
-    ax.set_xlabel('Simulation Time (s)', fontsize=12)
-    ax.set_ylabel('Separation Distance (m)', fontsize=12)
-    ax.set_title('Separation Distance History  (All MC Runs)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Simulation Time (s)', fontsize=16)
+    ax.set_ylabel('Separation Distance (m)', fontsize=16)
+    ax.set_title('Separation Distance History  (All MC Runs)', fontsize=18, fontweight='bold')
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend(fontsize=9, loc='upper right')
+    ax.legend(fontsize=13, loc='upper right')
     plt.tight_layout()
 
     save_path = os.path.join(output_folder, 'distance_history.png')
@@ -390,11 +402,11 @@ def plot_dv_vs_distance(all_runs_data, summary_df, output_folder, n_bins=60):
         Line2D([0], [0], color=_C['fuel'],       linewidth=1.5, label='Fuel / Bounds'),
         Line2D([0], [0], color='black',          linewidth=2.2, label='Mean ± 1σ'),
     ]
-    ax.legend(handles=outcome_handles, fontsize=9)
+    ax.legend(handles=outcome_handles, fontsize=11)
 
-    ax.set_xlabel('Separation Distance (m)', fontsize=12)
-    ax.set_ylabel('Cumulative ΔV Consumed (m/s)', fontsize=12)
-    ax.set_title('ΔV Consumption vs. Separation Distance', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Separation Distance (m)', fontsize=14)
+    ax.set_ylabel('Cumulative ΔV Consumed (m/s)', fontsize=14)
+    ax.set_title('ΔV Consumption vs. Separation Distance', fontsize=16, fontweight='bold')
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
     ax.grid(True, linestyle='--', alpha=0.5)
@@ -463,11 +475,11 @@ def plot_reward_heatmap(all_runs_data, summary_df, output_folder):
                         vmin=0.0, vmax=1.0, interpolation='nearest')
 
     ax_heat.set_xticks(range(len(col_labels)))
-    ax_heat.set_xticklabels(col_labels, rotation=0, ha='center', fontsize=9)
+    ax_heat.set_xticklabels(col_labels, rotation=0, ha='center', fontsize=11)
     ax_heat.set_yticks([])
-    ax_heat.set_ylabel('Runs  (sorted by total reward  ↑  best)', fontsize=11)
+    ax_heat.set_ylabel('Runs  (sorted by total reward  ↑  best)', fontsize=13)
     ax_heat.set_title('Reward Components per Run\n(per-column min–max normalised)',
-                      fontsize=12, fontweight='bold')
+                      fontsize=14, fontweight='bold')
     plt.colorbar(im, ax=ax_heat, fraction=0.03, pad=0.02,
                  label='Normalised component value')
 
@@ -477,7 +489,7 @@ def plot_reward_heatmap(all_runs_data, summary_df, output_folder):
     ax_strip.imshow(strip_data, aspect='auto', cmap='RdYlGn',
                     vmin=0.0, vmax=1.0, interpolation='nearest')
     ax_strip.set_xticks([0])
-    ax_strip.set_xticklabels(['S/F'], fontsize=8)
+    ax_strip.set_xticklabels(['S/F'], fontsize=10)
     ax_strip.set_yticks([])
     ax_strip.set_title('', fontsize=1)
 
@@ -495,22 +507,80 @@ def plot_reward_heatmap(all_runs_data, summary_df, output_folder):
                   if fail_mask.any()    else np.zeros(len(rew_cols)))
 
     ax_bar.barh(y_pos + bar_h / 2, means_succ, bar_h,
-                color=_C['success'], edgecolor='k', label='Docked',    alpha=0.85)
+                color=_ML['medium'], edgecolor='k', label='Docked',    alpha=0.85)
     ax_bar.barh(y_pos - bar_h / 2, means_fail, bar_h,
-                color=_C['other'],   edgecolor='k', label='Not Docked', alpha=0.85)
+                color=_ML['darkest'], edgecolor='k', label='Not Docked', alpha=0.85)
 
     ax_bar.set_yticks(y_pos)
-    ax_bar.set_yticklabels([c.replace('\n', ' ') for c in col_labels], fontsize=9)
+    ax_bar.set_yticklabels([c.replace('\n', ' ') for c in col_labels], fontsize=11)
     ax_bar.axvline(0, color='black', linewidth=0.8)
-    ax_bar.set_xlabel('Mean Cumulative Reward', fontsize=10)
-    ax_bar.set_title('Success vs Fail\nMean per Component', fontsize=11, fontweight='bold')
-    ax_bar.legend(fontsize=9, loc='lower right')
+    ax_bar.set_xlabel('Mean Cumulative Reward', fontsize=12)
+    ax_bar.set_title('Success vs Fail\nMean per Component', fontsize=13, fontweight='bold')
+    ax_bar.legend(fontsize=11, loc='lower right')
     ax_bar.grid(True, linestyle='--', alpha=0.5, axis='x')
 
-    fig.suptitle('Reward Component Analysis  (Monte Carlo)', fontsize=15,
+    fig.suptitle('Reward Component Analysis  (Monte Carlo)', fontsize=17,
                  fontweight='bold', y=1.01)
 
     save_path = os.path.join(output_folder, 'reward_heatmap.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {save_path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Sun angle vs. separation distance (all runs)
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_sun_angle_vs_distance(all_runs_data, summary_df, output_folder,
+                               cone_angle_deg=_SUN_CONE_DEG,
+                               cutoff_range=_ILLUM_CUTOFF):
+    print("Generating Sun Angle vs. Separation Distance...")
+
+    if not any('sun_angle_deg' in df.columns for df in all_runs_data):
+        print("  No sun_angle_deg data — skipping.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    seen_labels = set()
+
+    for idx, run_df in enumerate(all_runs_data):
+        if 'sun_angle_deg' not in run_df.columns or not _has_pos(run_df):
+            continue
+
+        row        = summary_df.iloc[idx]
+        success    = bool(row['success'])
+        end_status = str(row['end_status'])
+        color      = _status_color(end_status, success)
+        alpha      = 0.65 if success else 0.20
+
+        sep    = _separation(run_df).values
+        angles = run_df['sun_angle_deg'].values
+
+        label_key = 'Docked' if success else _simplify_status(end_status)
+        lbl = label_key if label_key not in seen_labels else None
+        if lbl:
+            seen_labels.add(label_key)
+
+        ax.plot(sep, angles, color=color, alpha=alpha, linewidth=0.8, label=lbl, zorder=2)
+
+    # Illumination cone limit (horizontal)
+    ax.axhline(cone_angle_deg, color='darkorange', linestyle='--', linewidth=1.8,
+               label=f'Illumination cone limit  ({cone_angle_deg:.0f}°)', zorder=5)
+
+    # Illumination rewarder cutoff range (vertical — reward disabled below this)
+    ax.axvline(cutoff_range, color='royalblue', linestyle=':', linewidth=1.8,
+               label=f'Illumination reward cutoff  ({cutoff_range:.0f} m)', zorder=5)
+
+    ax.set_xlabel('Separation Distance (m)', fontsize=14)
+    ax.set_ylabel('Sun Angle (deg)', fontsize=14)
+    ax.set_xlim(left=0)
+    ax.set_ylim(0, 185)
+    ax.set_title('Sun Angle vs. Separation Distance  (All MC Runs)', fontsize=16, fontweight='bold')
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.legend(fontsize=11, loc='upper right')
+    plt.tight_layout()
+
+    save_path = os.path.join(output_folder, 'sun_angle_vs_distance.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"  Saved: {save_path}")

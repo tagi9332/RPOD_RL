@@ -8,13 +8,15 @@ SIM_DT = 1.0
 
 # Delta-V Action Limits
 MAX_DV = 0.5  # m/s
+DV_AVAILABLE_INIT = 150  # m/s — initial fuel budget (must match inspector_sat_args)
 MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 
 # Relative State Initialization Bounds
-MAX_REL_POS = 2000  # meters
-MIN_REL_POS = 1800     # meters
-MAX_REL_VEL = 0.01    # m/s
+MAX_REL_POS = 1200  # meters
+MIN_REL_POS = 1000    # meters
+MAX_REL_VEL = 1.00    # m/s
 MIN_REL_VEL = 0.0      # m/s
+INITIAL_APPROACH_VEL = 0  # m/s — initial velocity directed toward RSO
 
 # Conjunction Radius for Docking success
 CONJUNCTION_RADIUS = 5  # meters
