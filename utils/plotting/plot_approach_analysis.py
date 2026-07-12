@@ -295,40 +295,128 @@ def plot_distance_history(all_runs_data, summary_df, output_folder,
                           conjunction_r=_CONJUNCTION_R):
     print("Generating Distance Time History...")
 
+    # --- shared data prep ---
+    valid = [
+        (idx, run_df) for idx, run_df in enumerate(all_runs_data)
+        if _has_pos(run_df) and 'sim_time' in run_df.columns
+    ]
+
+    def _draw_lines(ax, alpha_success=0.30, alpha_fail=0.12):
+        seen_labels = set()
+        for idx, run_df in valid:
+            row        = summary_df.iloc[idx]
+            success    = bool(row['success'])
+            end_status = str(row['end_status'])
+            color      = _status_color(end_status, success)
+            alpha      = alpha_success if success else alpha_fail
+            label_key  = 'Docked' if success else _simplify_status(end_status)
+            lbl        = label_key if label_key not in seen_labels else None
+            if lbl:
+                seen_labels.add(label_key)
+            ax.plot(run_df['sim_time'].values, _separation(run_df).values,
+                    color=color, alpha=alpha, linewidth=0.8, label=lbl, zorder=2)
+
+    def _add_standoff(ax):
+        ax.axhline(standoff_dist, color=_ML['medium'], linestyle='--', linewidth=1.8,
+                   label=f'Standoff / Waypoint  ({standoff_dist:.0f} m)', zorder=4)
+
+    def _base_axes(ax, ylabel='Separation Distance (m)'):
+        _add_standoff(ax)
+        ax.set_xlabel('Simulation Time (s)', fontsize=16)
+        ax.set_ylabel(ylabel, fontsize=16)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.legend(fontsize=13, loc='upper right')
+
+    # ── Variant 1: baseline ──────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(12, 6))
-    seen_labels = set()
-
-    for idx, run_df in enumerate(all_runs_data):
-        if not (_has_pos(run_df) and 'sim_time' in run_df.columns):
-            continue
-
-        row        = summary_df.iloc[idx]
-        success    = bool(row['success'])
-        end_status = str(row['end_status'])
-        color      = _status_color(end_status, success)
-        alpha      = 0.65 if success else 0.20
-
-        label_key = 'Docked' if success else _simplify_status(end_status)
-        lbl = label_key if label_key not in seen_labels else None
-        if lbl:
-            seen_labels.add(label_key)
-
-        ax.plot(run_df['sim_time'].values, _separation(run_df).values,
-                color=color, alpha=alpha, linewidth=0.8, label=lbl, zorder=2)
-
-    ax.axhline(standoff_dist, color=_ML['medium'], linestyle='--', linewidth=1.8,
-               label=f'Standoff / Waypoint  ({standoff_dist:.0f} m)', zorder=4)
-
-    ax.set_xlabel('Simulation Time (s)', fontsize=16)
-    ax.set_ylabel('Separation Distance (m)', fontsize=16)
+    _draw_lines(ax)
+    _base_axes(ax)
     ax.set_title('Separation Distance History  (All MC Runs)', fontsize=18, fontweight='bold')
+    plt.tight_layout()
+    save_path = os.path.join(output_folder, 'distance_history.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {save_path}")
+
+    # ── Variant 2: percentile envelope ──────────────────────────────────────
+    t_max  = max(run_df['sim_time'].max() for _, run_df in valid)
+    t_grid = np.arange(0, t_max + 1, 10.0)
+
+    sep_matrix = np.full((len(valid), len(t_grid)), np.nan)
+    for i, (_, run_df) in enumerate(valid):
+        t = run_df['sim_time'].values
+        s = _separation(run_df).values
+        mask = (t_grid >= t[0]) & (t_grid <= t[-1])
+        sep_matrix[i, mask] = np.interp(t_grid[mask], t, s)
+
+    p10 = np.nanpercentile(sep_matrix, 10, axis=0)
+    p25 = np.nanpercentile(sep_matrix, 25, axis=0)
+    p50 = np.nanpercentile(sep_matrix, 50, axis=0)
+    p75 = np.nanpercentile(sep_matrix, 75, axis=0)
+    p90 = np.nanpercentile(sep_matrix, 90, axis=0)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    _draw_lines(ax, alpha_success=0.12, alpha_fail=0.06)
+    ax.fill_between(t_grid, p10, p90, alpha=0.18, color='gray', label='10–90th pct', zorder=3)
+    ax.fill_between(t_grid, p25, p75, alpha=0.30, color='gray', label='25–75th pct', zorder=3)
+    ax.plot(t_grid, p50, color='black', linewidth=2.0, label='Median', zorder=5)
+    _base_axes(ax)
+    ax.set_title('Separation Distance History — Percentile Bands', fontsize=18, fontweight='bold')
+    plt.tight_layout()
+    save_path = os.path.join(output_folder, 'distance_history_percentile.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {save_path}")
+
+    # ── Variant 3: log y-axis ───────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(12, 6))
+    _draw_lines(ax)
+    _add_standoff(ax)
+    ax.set_xlabel('Simulation Time (s)', fontsize=16)
+    ax.set_ylabel('Separation Distance (m)  [log scale]', fontsize=16)
+    ax.set_title('Separation Distance History — Log Scale', fontsize=18, fontweight='bold')
     ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
-    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.set_yscale('log')
+    ax.grid(True, which='both', linestyle='--', alpha=0.5)
     ax.legend(fontsize=13, loc='upper right')
     plt.tight_layout()
+    save_path = os.path.join(output_folder, 'distance_history_log.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {save_path}")
 
-    save_path = os.path.join(output_folder, 'distance_history.png')
+    # ── Variant 4: stacked subplots (full + 0–200 m zoom) ───────────────────
+    # Find the earliest time any run first drops to ≤200 m so the bottom
+    # subplot x-axis starts there rather than from t=0.
+    t_enter = t_max
+    for _, run_df in valid:
+        sep = _separation(run_df).values
+        t   = run_df['sim_time'].values
+        below = np.where(sep <= 200.0)[0]
+        if len(below):
+            t_enter = min(t_enter, float(t[below[0]]))
+    bot_xlim_left = max(0.0, t_enter - 30.0)   # small buffer before entry
+
+    fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(12, 10))
+
+    _draw_lines(ax_top)
+    _base_axes(ax_top, ylabel='Separation Distance (m)')
+    ax_top.set_xlabel('')
+    ax_top.set_title('Separation Distance History  (All MC Runs)', fontsize=18, fontweight='bold')
+
+    _draw_lines(ax_bot)
+    _add_standoff(ax_bot)
+    ax_bot.set_xlabel('Simulation Time (s)', fontsize=16)
+    ax_bot.set_ylabel('Separation Distance (m)\n[0–200 m detail]', fontsize=14)
+    ax_bot.set_xlim(left=bot_xlim_left)
+    ax_bot.set_ylim(bottom=0, top=200)
+    ax_bot.grid(True, linestyle='--', alpha=0.5)
+    ax_bot.legend(fontsize=11, loc='upper right')
+
+    plt.tight_layout()
+    save_path = os.path.join(output_folder, 'distance_history_zoomed.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"  Saved: {save_path}")
@@ -407,7 +495,7 @@ def plot_dv_vs_distance(all_runs_data, summary_df, output_folder, n_bins=60):
     ax.set_xlabel('Separation Distance (m)', fontsize=14)
     ax.set_ylabel('Cumulative ΔV Consumed (m/s)', fontsize=14)
     ax.set_title('ΔV Consumption vs. Separation Distance', fontsize=16, fontweight='bold')
-    ax.set_xlim(left=0)
+    ax.invert_xaxis()
     ax.set_ylim(bottom=0)
     ax.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()

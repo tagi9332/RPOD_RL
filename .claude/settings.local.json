@@ -10,7 +10,8 @@
       "Bash(python -c \"import sys; sys.path.insert\\(0, 'd:/tanne/Documents/rpod_rl'\\); from bsk_rl.obs import ResourceRewardWeight; import inspect; print\\(inspect.getsource\\(ResourceRewardWeight\\)\\)\")",
       "Bash(python -c \"import bsk_rl; import inspect; import os; print\\(os.path.dirname\\(inspect.getfile\\(bsk_rl\\)\\)\\)\")",
       "Bash(pip show *)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(grep -E \"\\\\.py$\")"
     ]
   }
 }

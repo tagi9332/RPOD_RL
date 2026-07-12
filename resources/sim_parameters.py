@@ -7,22 +7,22 @@ SIM_TIME = 10800  # seconds (3 hours)
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 0.5  # m/s
+MAX_DV = 0.1  # m/s  — matches 10 N thruster on 200 kg s/c
 DV_AVAILABLE_INIT = 150  # m/s — initial fuel budget (must match inspector_sat_args)
-MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
+MAX_DRIFT_DURATION = 180 # s  (keep <~42s for rollouts to fit inside one episode)
 
 # Relative State Initialization Bounds
-MAX_REL_POS = 1200  # meters
+MAX_REL_POS = 1005  # meters
 MIN_REL_POS = 1000    # meters
 MAX_REL_VEL = 1.00    # m/s
 MIN_REL_VEL = 0.0      # m/s
 INITIAL_APPROACH_VEL = 0  # m/s — initial velocity directed toward RSO
 
 # Conjunction Radius for Docking success
-CONJUNCTION_RADIUS = 5  # meters
+CONJUNCTION_RADIUS = 335  # meters
 
 # --- REWARDER PARAMETERS ---
-approach_corridor_angle_deg=30 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
+approach_corridor_angle_deg=180 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
 
 # Phase Transition Parameters
 docking_phase_range_threshold=500

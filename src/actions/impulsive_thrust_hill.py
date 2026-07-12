@@ -86,6 +86,8 @@ class ImpulsiveThrust(ContinuousAction):
         self.satellite.logger.info(
             f"Thrusting with inertial dV {dv_N} with {dt} second drift."
         )
+        self.satellite.latest_burn_dv_mag = float(np.linalg.norm(dv_N))
+        self.satellite.latest_burn_drift_duration = float(dt)
         self.satellite.fsw.action_impulsive_thrust(dv_N)
         self.satellite.update_timed_terminal_event(
             self.satellite.simulator.sim_time + dt

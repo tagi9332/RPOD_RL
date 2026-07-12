@@ -399,10 +399,10 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-27_20-41-42\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-05-29_14-29-32\rpo_min_dv_spec.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=500, num_workers=14)
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=30, num_workers=14)
 
     raw_runs_data = all_runs_data  # keep raw per-step data for impulse analysis
     if all_runs_data:

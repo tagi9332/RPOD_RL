@@ -99,10 +99,22 @@ def sun_hat_chief(self, other):
     HN = other.dynamics.HN
     return HN @ r_SB_N_hat
 
+_MU_EARTH = 3.986004418e14  # m^3/s^2
+
+def _deputy_eccentricity(self, other):  # noqa: ARG001
+    from Basilisk.utilities.orbitalMotion import rv2elem
+    oe = rv2elem(_MU_EARTH, np.array(self.dynamics.r_BN_N), np.array(self.dynamics.v_BN_N))
+    return oe.e  # type: ignore[union-attr]
+
+def _deputy_semi_major_axis(self, other):  # noqa: ARG001
+    from Basilisk.utilities.orbitalMotion import rv2elem
+    oe = rv2elem(_MU_EARTH, np.array(self.dynamics.r_BN_N), np.array(self.dynamics.v_BN_N))
+    return oe.a  # type: ignore[union-attr]
+
 class InspectorSat(sats.Satellite):
     observation_spec = [
         obs.SatProperties(
-            dict(prop="dv_available", norm=50),
+            dict(prop="dv_available", norm=150),
         ),
         obs.ResourceRewardWeight(),
         obs.RelativeProperties(
@@ -265,6 +277,8 @@ class Sb3BksEnv(gym.Env):
             "docked_state": info.get("conjunction", False),
             "dV_remaining": dv_remaining,
             "max_range_violation": info.get("max_range_violation", False),
+            "burn_dv_mag": getattr(inspector_sat, "latest_burn_dv_mag", None),
+            "burn_drift_duration": getattr(inspector_sat, "latest_burn_drift_duration", None),
         }
 
         return obs_dict[self.agent_name], reward_dict[self.agent_name], terminated_dict[self.agent_name], truncated_dict[self.agent_name], info

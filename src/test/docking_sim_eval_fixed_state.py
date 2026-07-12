@@ -386,7 +386,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-05-27_07-31-53\rpo_min_dv_spec.zip"
+    model_path = r"models\training_run_2026-05-29_13-41-12\rpo_min_dv_spec.zip"
     num_runs = 20
     #---------------------------------------------------------------------------------
 

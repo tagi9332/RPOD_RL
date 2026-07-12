@@ -1,5 +1,5 @@
 # ResourceReward
-dv_reward_weight=0.75
+dv_reward_weight=1
 
 dv_constant_penalty=0
 
