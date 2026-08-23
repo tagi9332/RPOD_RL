@@ -211,3 +211,6 @@ logs/
 
 # vscode configurations
 .vscode/
+
+# claude files
+.claude
