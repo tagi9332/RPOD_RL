@@ -10,7 +10,14 @@
       "Bash(python -c \"import sys; sys.path.insert\\(0, 'd:/tanne/Documents/rpod_rl'\\); from bsk_rl.obs import ResourceRewardWeight; import inspect; print\\(inspect.getsource\\(ResourceRewardWeight\\)\\)\")",
       "Bash(python -c \"import bsk_rl; import inspect; import os; print\\(os.path.dirname\\(inspect.getfile\\(bsk_rl\\)\\)\\)\")",
       "Bash(pip show *)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(python -m py_compile src/test/docking_sim_eval_fixed_state.py)",
+      "Bash(python -c \"import bsk_rl, os; print\\(os.path.dirname\\(bsk_rl.__file__\\)\\)\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(python -c \"import utils.observations as o, inspect; print\\(inspect.getsourcefile\\(o\\)\\)\")",
+      "Bash(timeout 240 python -c ' *)",
+      "Bash(timeout 280 python -c ' *)",
+      "Bash(timeout 590 python -c ' *)"
     ]
   }
 }

@@ -136,7 +136,7 @@ def make_eval_env(seed: int = 42):
             range_max=250, theta_solar_max=np.radians(60)
         )
         rewarders = get_rewarders()
-        randomizer = make_sat_arg_randomizer(mode="test", rso_att_type="random")
+        randomizer = make_sat_arg_randomizer(mode="train", rso_att_type="random")
 
         env = ConstellationTasking(
             satellites=[rso, inspector],
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models\training_run_2026-05-27_20-41-42\rpo_min_dv_spec.zip"
+    LOAD_PATH = r"models\MC_model.zip"
     # -------------------------------------------------------------------------
 
     # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
