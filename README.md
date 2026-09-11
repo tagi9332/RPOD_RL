@@ -1,5 +1,4 @@
 # RPOD_RL
-
 **Reinforcement Learning for Rendezvous, Proximity Operations, and Docking**
 
 RPOD_RL trains an autonomous **Inspector** satellite to rendezvous with and dock to a **Resident Space Object (RSO)** using deep reinforcement learning. It combines the high-fidelity **[Basilisk](http://hanspeterschaub.info/basilisk/)** astrodynamics simulator with the **[bsk-rl](https://avslab.github.io/bsk_rl/)** Gymnasium wrapper and **[Stable-Baselines3](https://stable-baselines3.readthedocs.io/)** (PPO) to learn a full approach → waypoint-capture → docking maneuver under realistic orbital dynamics, attitude control, fuel constraints, and illumination geometry.
