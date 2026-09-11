@@ -3,7 +3,7 @@
 
 RPOD_RL trains an autonomous **Inspector** satellite to rendezvous with and dock to a **Resident Space Object (RSO)** using deep reinforcement learning. It combines the high-fidelity **[Basilisk](http://hanspeterschaub.info/basilisk/)** astrodynamics simulator with the **[bsk-rl](https://avslab.github.io/bsk_rl/)** Gymnasium wrapper and **[Stable-Baselines3](https://stable-baselines3.readthedocs.io/)** (PPO) to learn a full approach → waypoint-capture → docking maneuver under realistic orbital dynamics, attitude control, fuel constraints, and illumination geometry.
 
-Everything in the environment — orbital propagation, attitude pointing, sensor/actuator behavior, and mission geometry — is simulated in Basilisk. The RL agent only chooses **when and how hard to thrust** (an impulsive Δv in the RSO's Hill frame) and **how long to drift** before its next decision.
+Everything in the environment i.e. orbital propagation, attitude pointing, sensor/actuator behavior, and mission geometry is simulated in Basilisk. The RL agent only chooses **when and how hard to thrust** (an impulsive Δv in the RSO's Hill frame) and **how long to drift** before its next decision.
 
 ---
 
@@ -32,13 +32,13 @@ Everything in the environment — orbital propagation, attitude pointing, sensor
 
 ## Overview
 
-The task: an **Inspector** satellite starts 1000–1200 m from a tumbling/oriented **RSO** in a geostationary-altitude orbit, with a limited Δv budget (150 m/s). It must:
+The task: an **Inspector** satellite starts 1000–1200 m from a randomly oriented **RSO** in a geostationary-altitude orbit, with a limited Δv budget (150 m/s). It must:
 
 1. Navigate toward the RSO's docking-port boresight, preferring the sunlit approach side.
 2. Brake and capture a **30 m body-fixed standoff waypoint** in front of the docking port.
 3. Perform a controlled final ingress and achieve a **conjunction** (within the docking radius) while inside a **30° approach corridor** around the docking-port boresight.
 
-Success requires balancing four competing objectives — fuel economy, time, approach-corridor alignment, and terminal docking velocity — which the reward function encodes as a hierarchical, phase-aware shaping signal (see [Reward Structure](#reward-structure)).
+Success requires balancing competing objectives (fuel economy, time, approach-corridor alignment, and terminal docking velocity) which the reward function encodes as a hierarchical, phase-aware shaping signal (see [Reward Structure](#reward-structure)).
 
 ## How It Works
 
@@ -48,7 +48,7 @@ Two `bsk_rl.sats.Satellite` subclasses are defined in [src/train/docking_sim_tra
 
 | Satellite | Role | Behavior |
 |---|---|---|
-| `RSOSat` | Target / chief | Passive — never retasked by the RL agent. Spawns with a randomized GEO-like orbit and attitude each episode. |
+| `RSOSat` | Target / chief | Passive - never retasked by the RL agent. Spawns with a randomized GEO-like orbit and attitude each episode. |
 | `InspectorSat` | Agent / deputy | The learned policy controls this satellite via impulsive Δv burns and continuously points its instrument boresight at the RSO (custom FSW task, [src/fsw_modules/pointing_fsw.py](src/fsw_modules/pointing_fsw.py)). |
 
 ### Action Space
@@ -79,22 +79,22 @@ Defined on `InspectorSat.observation_spec` ([src/train/docking_sim_training.py](
 
 The reward is a hierarchical sum of six components, built by [`get_rewarders()`](src/rewarders/rewarders.py) and weighted by [resources/weights.py](resources/weights.py):
 
-**Phase 0 — long-range approach** (Inspector outside the waypoint capture radius):
-- `IlluminationReward` — rewards approaching from the RSO's sunlit side (active beyond 500 m).
-- `WaypointPhaseReward` (dense) — log-MSE shaping toward the 30 m standoff waypoint, with a proximity-scaled velocity-braking term.
-- `DockingCorridorReward` — rewards boresight-corridor alignment once inside 120 m of the RSO.
-- `DeltaVReward` — quadratic penalty on Δv magnitude per burn (discourages wasteful maneuvers).
-- `QuadraticTimePenalty` — an integral, step-size-independent time penalty that ramps steeply near the episode's 3-hour limit.
+**Phase 0 - long-range approach** (Inspector outside the waypoint capture radius):
+- `IlluminationReward` - rewards approaching from the RSO's sunlit side (active beyond 500 m).
+- `WaypointPhaseReward` (dense) - log-MSE shaping toward the 30 m standoff waypoint, with a proximity-scaled velocity-braking term.
+- `DockingCorridorReward` - rewards boresight-corridor alignment once inside 120 m of the RSO.
+- `DeltaVReward` - quadratic penalty on Δv magnitude per burn (discourages wasteful maneuvers).
+- `QuadraticTimePenalty` - an integral, step-size-independent time penalty that ramps steeply near the episode's 3-hour limit.
 
 **Phase transition:** a one-time sparse bonus fires the instant the Inspector first enters the waypoint capture sphere (10 m radius); the episode latches into Phase 1 from then on.
 
-**Phase 1 — terminal ingress** (after waypoint capture):
-- `WaypointPhaseReward` (dense) — log-MSE shaping toward the docking port itself, with an always-on, stronger velocity penalty to enforce a controlled final approach.
+**Phase 1 - terminal ingress** (after waypoint capture):
+- `WaypointPhaseReward` (dense) - log-MSE shaping toward the docking port itself, with an always-on, stronger velocity penalty to enforce a controlled final approach.
 
 **Terminal events** (`SparseEventReward`, fire once and end the episode):
-- **Docking success** — conjunction within the approach-corridor angle of the docking-port boresight → large positive reward, scaled by alignment quality, plus a fuel-efficiency bonus for Δv remaining.
-- **Collision** — conjunction outside the corridor → large penalty.
-- **Max-range violation** — Inspector exceeds the allowed operating radius → penalty.
+- **Docking success** - conjunction within the approach-corridor angle of the docking-port boresight → large positive reward, scaled by alignment quality, plus a fuel-efficiency bonus for Δv remaining.
+- **Collision** - conjunction outside the corridor → large penalty.
+- **Max-range violation** - Inspector exceeds the allowed operating radius → penalty.
 
 An optional **waypoint gate** (`WAYPOINT_GATE_ENABLED` in [src/rewarders/rewarders.py](src/rewarders/rewarders.py)) can require physical waypoint capture before the docking bonus is awarded at all.
 
@@ -102,7 +102,7 @@ An optional **waypoint gate** (`WAYPOINT_GATE_ENABLED` in [src/rewarders/rewarde
 
 [`SatArgRandomizer`](src/randomizers/sat_arg_randomizer_rso_random_inertial.py) randomizes, each episode:
 - RSO orbital elements (near-GEO altitude, near-circular).
-- RSO attitude — several modes are supported (`random`, `velocity`-aligned, `radial`, `normal`, noisy variants, etc.), selected via `rso_att_type`.
+- RSO attitude - several modes are supported (`random`, `velocity`-aligned, `radial`, `normal`, noisy variants, etc.), selected via `rso_att_type`.
 - Inspector's initial relative position/velocity in the Hill frame.
 - Optionally, the active Δv-penalty weight (sampled per episode from a truncated Gaussian) so a single policy generalizes across a range of fuel-cost tradeoffs.
 
@@ -155,7 +155,7 @@ rpod_rl/
 ### Prerequisites
 
 - **Python 3.12** (pinned: `3.12.12`)
-- A C++ toolchain is *not* required — `bsk` (Basilisk) and `bsk-rl` are installed as prebuilt PyPI packages here.
+- A C++ toolchain is *not* required - `bsk` (Basilisk) and `bsk-rl` are installed as prebuilt PyPI packages here.
 - Windows, Linux, or macOS. Multi-core training spawns one Basilisk simulation per CPU core, so more cores materially speeds up training.
 
 ### 1. Clone the repository
@@ -167,7 +167,7 @@ cd RPOD_RL
 
 ### 2. Create a virtual environment and install dependencies
 
-Using `uv` (recommended — this is what [slurm/rl_training_submit.sh](slurm/rl_training_submit.sh) uses on HPC):
+Using `uv` (recommended - this is what [slurm/rl_training_submit.sh](slurm/rl_training_submit.sh) uses on HPC):
 
 ```bash
 uv venv .venv --python 3.12
@@ -213,15 +213,15 @@ python -m src.train.docking_sim_multi_process
 
 This is the main training loop. It:
 - Detects available CPU cores and reserves 4 for the OS (`num_cpu = cpu_count - 4`), launching one `SubprocVecEnv` worker per remaining core.
-- Trains PPO (`n_steps=512` per env, `batch_size=1024`, `gamma=1.0`, `device="cpu"` — Basilisk simulation, not the network, is the bottleneck) for `total_timesteps=4_000_000` by default.
-- Can warm-start from an existing checkpoint — set `LOAD_MODEL = True` and `LOAD_PATH` near the top of `__main__` in [src/train/docking_sim_multi_process.py](src/train/docking_sim_multi_process.py); set `LOAD_MODEL = False` to train from scratch.
+- Trains PPO (`n_steps=512` per env, `batch_size=1024`, `gamma=1.0`, `device="cpu"` - Basilisk simulation, not the network, is the bottleneck) for `total_timesteps=4_000_000` by default.
+- Can warm-start from an existing checkpoint - set `LOAD_MODEL = True` and `LOAD_PATH` near the top of `__main__` in [src/train/docking_sim_multi_process.py](src/train/docking_sim_multi_process.py); set `LOAD_MODEL = False` to train from scratch.
 - Evaluates against a fixed-orbit eval env every `eval_freq` steps (`EvalCallback`) and checkpoints periodically (`CheckpointCallback`), saving to `models/training_run_<timestamp>/`.
 - Logs to `logs/training_run_<timestamp>/` (stdout, CSV, and TensorBoard).
-- Optionally randomizes the Δv-penalty weight per episode — set `DV_WEIGHT_MEAN` near the top of the file to a float to enable, or leave `None` to use the fixed weight from `resources/weights.py`.
-- Supports optional curriculum schedules (conjunction radius, corridor angle, attitude error, Δv penalty, drift duration, max Δv) — see [Curriculum Learning](#curriculum-learning).
+- Optionally randomizes the Δv-penalty weight per episode - set `DV_WEIGHT_MEAN` near the top of the file to a float to enable, or leave `None` to use the fixed weight from `resources/weights.py`.
+- Supports optional curriculum schedules (conjunction radius, corridor angle, attitude error, Δv penalty, drift duration, max Δv) - see [Curriculum Learning](#curriculum-learning).
 - Ctrl+C safely saves the current model and logs before exiting.
 
-**Single-core smoke test** (sanity-checks the environment/reward wiring in a couple minutes, not intended for real training — `total_timesteps=100`):
+**Single-core smoke test** (sanity-checks the environment/reward wiring in a couple minutes, not intended for real training - `total_timesteps=100`):
 
 ```bash
 python -m src.train.docking_sim_training
@@ -239,12 +239,12 @@ Then open the printed `localhost` URL. Each training run's `progress.csv` in `lo
 
 Two independent curriculum mechanisms are available:
 
-1. **Continuous parameter schedulers** ([src/curriculum/parameter_schedulers.py](src/curriculum/parameter_schedulers.py)) — linearly anneal a single parameter (conjunction radius, corridor angle, attitude pointing error, Δv penalty weight, max drift duration, or max Δv) over training, evaluated against `eval_env` performance. Enable any of these by setting the corresponding `*_SCHEDULE = (initial, final)` tuple near the bottom of `docking_sim_multi_process.py`'s `__main__`; leave `None` to disable.
+1. **Continuous parameter schedulers** ([src/curriculum/parameter_schedulers.py](src/curriculum/parameter_schedulers.py)) - linearly anneal a single parameter (conjunction radius, corridor angle, attitude pointing error, Δv penalty weight, max drift duration, or max Δv) over training, evaluated against `eval_env` performance. Enable any of these by setting the corresponding `*_SCHEDULE = (initial, final)` tuple near the bottom of `docking_sim_multi_process.py`'s `__main__`; leave `None` to disable.
 
-2. **Discrete 3-stage reverse curriculum** ([src/train/docking_sim_curriculum_multi_process.py](src/train/docking_sim_curriculum_multi_process.py)) — trains "backwards" from the easiest sub-task to the full mission:
-   - **Stage 0 — Terminal approach:** spawns 20–24 m from the docking port, already inside the capture sphere; trains the final ingress maneuver in isolation.
-   - **Stage 1 — Correct-side capture:** spawns 65–615 m out on the boresight side; trains braking and waypoint capture, chaining into Stage 0 behavior.
-   - **Stage 2 — Full mission:** spawns 1800–2000 m out in any direction; trains the complete navigate → capture → dock chain, including wrong-side recovery.
+2. **Discrete 3-stage reverse curriculum** ([src/train/docking_sim_curriculum_multi_process.py](src/train/docking_sim_curriculum_multi_process.py)) - trains "backwards" from the easiest sub-task to the full mission:
+   - **Stage 0 - Terminal approach:** spawns 20–24 m from the docking port, already inside the capture sphere; trains the final ingress maneuver in isolation.
+   - **Stage 1 - Correct-side capture:** spawns 65–615 m out on the boresight side; trains braking and waypoint capture, chaining into Stage 0 behavior.
+   - **Stage 2 - Full mission:** spawns 1800–2000 m out in any direction; trains the complete navigate → capture → dock chain, including wrong-side recovery.
    
    Advancement is automatic and performance-gated: Stage 0→1 requires a 70% conjunction rate over 50 episodes; Stage 1→2 requires 50% over 100 episodes (see `CurriculumStageCallback`). Run with:
 
@@ -266,7 +266,7 @@ Set `model_path`, `num_runs`, and `num_workers` in its `__main__` block. This lo
 - Aggregate Monte Carlo distributions, summary table, Pareto front (time vs. Δv), failure-mode breakdown, waypoint-capture and approach-angle analysis
 - An interactive HTML trajectory viewer (`results/interactive_trajectories.html`)
 - Per-run [Vizard](http://hanspeterschaub.info/basilisk/Vizard/Vizard.html) playback files (`results/vizard_data/run_N_vizard.bin`) for 3D visualization in Basilisk's Vizard viewer
-- `results/mc_summary_stats.csv` / `results/mc_all_runs_data.csv` — raw tabular results for further analysis
+- `results/mc_summary_stats.csv` / `results/mc_all_runs_data.csv` - raw tabular results for further analysis
 
 **Navigation-error sensitivity study** ([src/test/docking_sim_eval_fixed_state.py](src/test/docking_sim_eval_fixed_state.py)):
 
@@ -289,9 +289,9 @@ Adjust `--time`, `--cpus-per-task`, `--mem`, and `--mail-user` for your allocati
 
 ## Configuration Reference
 
-All tunables live in [resources/](resources/) and are re-exported through `resources/__init__.py`, so any script can do `from resources import MAX_DV, dv_reward_weight, ...`. There are no CLI flags — change training behavior by editing these files (or the `__main__` blocks of the training scripts for run-level settings like model paths and timestep counts).
+All tunables live in [resources/](resources/) and are re-exported through `resources/__init__.py`, so any script can do `from resources import MAX_DV, dv_reward_weight, ...`. There are no CLI flags - change training behavior by editing these files (or the `__main__` blocks of the training scripts for run-level settings like model paths and timestep counts).
 
-**[resources/sim_parameters.py](resources/sim_parameters.py)** — simulation timing, action limits, and episode geometry:
+**[resources/sim_parameters.py](resources/sim_parameters.py)** - simulation timing, action limits, and episode geometry:
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -307,11 +307,11 @@ All tunables live in [resources/](resources/) and are re-exported through `resou
 | `STANDOFF_DISTANCE` | 30 m | Body-fixed waypoint distance from the docking port |
 | `WAYPOINT_CAPTURE_RADIUS` | 10 m | Sphere radius that triggers the Phase 0→1 transition |
 
-**[resources/weights.py](resources/weights.py)** — reward-term weights (see [Reward Structure](#reward-structure) for what each term does).
+**[resources/weights.py](resources/weights.py)** - reward-term weights (see [Reward Structure](#reward-structure) for what each term does).
 
-**[resources/hyperparameters.py](resources/hyperparameters.py)** — PPO hyperparameters: `learning_rate` (3e-4), `entropy_coeff` (0.001), `max_grad_norm` (0.5), `clip_range` (0.1). Note `docking_sim_multi_process.py` also sets `n_steps`, `batch_size`, and `gamma` directly at construction time rather than from this file.
+**[resources/hyperparameters.py](resources/hyperparameters.py)** - PPO hyperparameters: `learning_rate` (3e-4), `entropy_coeff` (0.001), `max_grad_norm` (0.5), `clip_range` (0.1). Note `docking_sim_multi_process.py` also sets `n_steps`, `batch_size`, and `gamma` directly at construction time rather than from this file.
 
-**[resources/constants.py](resources/constants.py)** — physical/astrodynamic constants (gravitational parameters, body radii, J2, solar radiation pressure) per Vallado's *Fundamentals of Astrodynamics and Applications*.
+**[resources/constants.py](resources/constants.py)** - physical/astrodynamic constants (gravitational parameters, body radii, J2, solar radiation pressure) per Vallado's *Fundamentals of Astrodynamics and Applications*.
 
 ## Output Artifacts
 
@@ -322,8 +322,8 @@ All tunables live in [resources/](resources/) and are re-exported through `resou
 | `models/archive/`, `models/gold_copy_high_dv/`, etc. | Named/curated checkpoints from past training runs kept for comparison or as warm-start sources |
 | `results/` | Evaluation plots, Monte Carlo CSVs, and Vizard playback binaries produced by the `src/test/` scripts |
 
-These directories are populated by running the scripts above — they are not build artifacts checked in for any other purpose, and old runs can be safely deleted once superseded.
+These directories are populated by running the scripts above - they are not build artifacts checked in for any other purpose, and old runs can be safely deleted once superseded.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
