@@ -399,10 +399,14 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\MC_model.zip"
+    model_path = r"models\training_run_2026-09-12_08-09-03\ppo_inspector_multicore_checkpoint_4750000_steps.zip"
     #---------------------------------------------------------------------------------
 
-    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=500, num_workers=10)
+    # Number of Monte Carlo runs and workers
+    num_runs = 500
+    num_workers = 10
+
+    all_runs_data, summary_df = run_monte_carlo_inference(model_path, output_folder, num_runs=num_runs, num_workers=num_workers)
 
     raw_runs_data = all_runs_data  # keep raw per-step data for impulse analysis
     if all_runs_data:
