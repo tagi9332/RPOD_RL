@@ -23,7 +23,7 @@ approach_corridor_weight=0.05
 # At t=T: cumulative = -time_penalty_weight.  At t=T/3: cumulative ≈ -time_penalty_weight*3.7%.
 # Set > expected dense-reward for a full loitering run (~55) to make coasting unprofitable.
 # time_penalty_weight=30.0
-time_penalty_weight=10
+time_penalty_weight=2.0
 
 # # Conjunction Penalty (Deprecated)
 conjunction_penalty=-20 

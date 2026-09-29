@@ -399,7 +399,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-09-12_08-09-03\ppo_inspector_multicore_checkpoint_4750000_steps.zip"
+    model_path = r"models\training_run_2026-09-27_20-37-59\final_model.zip"
     #---------------------------------------------------------------------------------
 
     # Number of Monte Carlo runs and workers

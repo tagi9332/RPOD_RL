@@ -7,7 +7,7 @@ SIM_TIME = 10800  # seconds (3 hours)
 SIM_DT = 1.0
 
 # Delta-V Action Limits
-MAX_DV = 0.5  # m/s
+MAX_DV = 0.1  # m/s
 DV_AVAILABLE_INIT = 150  # m/s — initial fuel budget (must match inspector_sat_args)
 MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
 

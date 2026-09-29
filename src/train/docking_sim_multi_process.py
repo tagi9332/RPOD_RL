@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
     # Config
     n_steps_per_env = 512
-    total_timesteps = 400_000_000 
+    total_timesteps = 100_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     # ------------------------- Model Initialization -------------------------
     # Initialize model
     LOAD_MODEL = True  # Set to False to train from scratch, True to load existing model
-    LOAD_PATH = r"models/training_run_2026-09-11_07-18-50/rpo_min_dv_spec_99.zip"
+    LOAD_PATH = r"models\training_run_2026-09-24_22-18-39\final_model.zip"
     # -------------------------------------------------------------------------
 
     # Optional hyperparameter overrides when loading a model (set to None to keep saved values)
@@ -305,6 +305,6 @@ if __name__ == "__main__":
     
     finally:
         # Final Save
-        model_save_path = os.path.join(model_path, "rpo_min_dv_spec.zip")
+        model_save_path = os.path.join(model_path, "final_model.zip")
         model.save(model_save_path)
         print(f"Training Complete. Model saved as {model_save_path}")
