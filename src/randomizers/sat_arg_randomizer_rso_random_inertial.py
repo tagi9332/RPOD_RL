@@ -1,3 +1,8 @@
+"""
+Randomizes the arguments for the RSO in an inertial frame.
+
+"""
+
 import numpy as np
 
 from Basilisk.utilities.orbitalMotion import elem2rv
@@ -72,12 +77,8 @@ class SatArgRandomizer:
         generate_new_rso = (self.mode == "train") or (not self._persistent_rso_state)
 
         if generate_new_rso:
-            a_meters = (R_EARTH * 1000) + np.random.uniform(35776.0 * 1000, 35796.0 * 1000)
+            a_meters = (R_EARTH * 1000) + np.random.uniform(400.0 * 1000, 600.0 * 1000)
             e = np.random.uniform(0.0, 0.0005)
-            # random_orbit() expects `a` in km and internally does oe.a = a * 1e3;
-            # a_meters is already in meters, so convert down or the semi-major axis
-            # ends up 1000x too large (near-zero mean motion, degenerate Hill frame,
-            # and observed runaway RW-acceleration warnings from the attitude FSW).
             chief_orbit = random_orbit(a=a_meters / 1000.0, e=e)
 
             _INERTIAL_ATT_MODES = {

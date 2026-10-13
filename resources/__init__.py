@@ -1,13 +1,10 @@
 from .constants import R_EARTH
 from .weights import (
     dv_reward_weight,
-    dv_constant_penalty,
     rel_range_log_weight,
     docking_reward,
-    misalignment_discount_factor,
     max_range_penalty,
     approach_corridor_weight,
-    conjunction_penalty,
     time_penalty_weight,
     illumination_weight,
     approach_velocity_weight,

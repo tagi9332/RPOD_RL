@@ -69,10 +69,6 @@ class DockingCorridorReward(GlobalReward):
     """
     Rewards/penalizes the Inspector for corridor alignment within a cutoff range.
 
-    Reward is scaled by (step_dt / nominal_dt) so that short drift steps yield
-    proportionally less reward than long ones — preventing step-rate exploitation.
-    The total reward accumulated over a full episode is independent of how many
-    steps the agent chooses to take.
     """
     data_store_type = DockingCorridorDataStore
 

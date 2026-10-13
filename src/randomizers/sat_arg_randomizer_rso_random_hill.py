@@ -1,3 +1,8 @@
+"""
+Randomizes the arguments for the RSO in a Hill frame.
+
+"""
+
 import numpy as np
 
 # Basilisk core

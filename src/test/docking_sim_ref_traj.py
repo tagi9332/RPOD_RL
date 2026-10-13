@@ -360,6 +360,9 @@ def _run_chunk(args):
 
 
 def run_monte_carlo_inference(model_path: str, output_folder: str, num_runs: int = 30, num_workers: int = 14) -> tuple[list, pd.DataFrame]:
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"Model not found at {model_path}")
+
     # Distribute run indices round-robin across workers for even load balancing
     all_indices = list(range(num_runs))
     actual_workers = min(num_workers, num_runs)
@@ -399,7 +402,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\training_run_2026-09-12_08-09-03\ppo_inspector_multicore_checkpoint_4750000_steps.zip"
+    model_path = r"models\MC_Model.zip"
     #---------------------------------------------------------------------------------
 
     # Number of Monte Carlo runs and workers

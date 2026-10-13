@@ -7,10 +7,7 @@ from bsk_rl.obs import ResourceRewardWeight
 logger = logging.getLogger(__name__)
 
 
-from resources import (
-    dv_reward_weight,
-    dv_constant_penalty
-)
+from resources import dv_reward_weight
 
 class ResourceData(Data):
     """Data for tracking a change in dV."""
@@ -75,7 +72,6 @@ class DeltaVReward(GlobalReward):
                 dv_magnitude = abs(data.resource_accumulated)
                 if dv_magnitude > 1e-6:
                     penalties[sat_name] = -self.reward_weight * (dv_magnitude ** self.exponent)
-                    # penalties[sat_name] = dv_constant_penalty - (dv_magnitude * dv_reward_weight)
             else:
                 penalties[sat_name] = 0.0
         return penalties

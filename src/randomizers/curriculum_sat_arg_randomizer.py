@@ -1,24 +1,6 @@
 """
 Stage-aware satellite argument randomizer for 3-stage reverse curriculum.
 
-Stage 0  (terminal):    Inspector 20-24 m from docking port along the boresight
-                        axis. All inits land inside the 10 m capture sphere so
-                        Phase 1 activates by the second step.
-
-Stage 1  (capture):     Inspector 65-615 m from docking port, strictly on the
-                        +boresight side. Trains Phase 0 deceleration and waypoint
-                        capture leading into the Stage 0 behaviour.
-
-Stage 2  (full):        Full random 1800-2000 m, any direction. Matches the
-                        production training distribution.
-
-Body → Hill frame (velocity-aligned RSO, exact for Stages 0/1):
-    DCM_HB = [[-1, 0, 0], [0, 0, 1], [0, 1, 0]]
-    r_Hill = [-body_x, body_z, body_y]
-
-    body_x = -Hill_x  (negated radial)
-    body_y =  Hill_z  (orbit normal)
-    body_z =  Hill_y  (along-track / velocity = docking boresight)
 """
 import numpy as np
 from Basilisk.utilities.orbitalMotion import elem2rv
@@ -44,8 +26,6 @@ class CurriculumSatArgRandomizer:
     Set ``.stage`` before each episode reset; CurriculumSb3BksEnv.reset()
     does this automatically from the curriculum callback.
 
-    Stages 0/1 force exact velocity alignment (rso_att_type="velocity") so
-    the body→Hill transform is exact. Stage 2 uses the configured rso_att_type.
     """
 
     def __init__(

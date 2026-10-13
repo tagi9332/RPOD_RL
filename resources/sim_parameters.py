@@ -8,15 +8,15 @@ SIM_DT = 1.0
 
 # Delta-V Action Limits
 MAX_DV = 0.5  # m/s
-DV_AVAILABLE_INIT = 150  # m/s — initial fuel budget (must match inspector_sat_args)
-MAX_DRIFT_DURATION = 60 # s  (keep <~42s for rollouts to fit inside one episode)
+DV_AVAILABLE_INIT = 50  # m/s — initial fuel budget
+MAX_DRIFT_DURATION = 60 #
 
 # Relative State Initialization Bounds
 MAX_REL_POS = 1200  # meters
 MIN_REL_POS = 1000    # meters
 MAX_REL_VEL = 1.00    # m/s
 MIN_REL_VEL = 0.0      # m/s
-INITIAL_APPROACH_VEL = 0  # m/s — initial velocity directed toward RSO
+INITIAL_APPROACH_VEL = 0  # m/s
 
 # Conjunction Radius for Docking success
 CONJUNCTION_RADIUS = 5  # meters
@@ -62,7 +62,7 @@ inspector_sat_args = dict(
     batteryStorageCapacity=1e12,
     storedCharge_Init=1e12,
     conjunction_radius=CONJUNCTION_RADIUS,
-    dv_available_init=150,
+    dv_available_init=DV_AVAILABLE_INIT,
     max_range_radius=5000,
     chief_name="RSO",
     u_max=2.0

@@ -28,7 +28,7 @@ from resources import (
 #
 # ── PHASE 0: Long-range approach  (Inspector > WAYPOINT_CAPTURE_RADIUS from waypoint)
 # ──────────────────────────────────────────────────────────────────────────────────────
-#  IlluminationReward      Active only when range > illumination_cutoff_range (150 m).
+#  IlluminationReward      Active only when range > illumination_cutoff_range.
 #                          Rewards approaching from the sunlit side of the RSO within
 #                          a cone_angle_deg (60°) of the sun direction; penalises
 #                          outside that cone proportionally to the angular deviation.
@@ -38,7 +38,7 @@ from resources import (
 #                          Velocity braking term is proximity-scaled: zero when far
 #                          from the waypoint, ramping to full weight at vel_onset_range.
 #
-#  DockingCorridorReward   Active only when range < docking_phase_range_threshold (120 m).
+#  DockingCorridorReward   Active only when range < docking_phase_range_threshold.
 #                          Rewards corridor alignment proportionally to (cosθ − cos_limit)
 #                          / (1 − cos_limit); penalises outside the corridor scaled by
 #                          both angular deviation and proximity to the RSO.
@@ -70,10 +70,11 @@ from resources import (
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  SparseEventReward       Three one-shot events detected on state transitions:
 #    Docking success:      Conjunction within approach_corridor_angle_deg of the
-#                          docking port boresight → +docking_reward × alignment_mult,
-#                          where alignment_mult ∈ [misalignment_discount_factor, 1]
-#                          scales with approach angle. Gated by WAYPOINT_GATE_ENABLED.
-#    Collision:            Conjunction outside the corridor → +conjunction_penalty (<0).
+#                          docking port boresight → +docking_reward × alignment_mult
+#                          + fuel bonus, where alignment_mult = 1 - angle/180.
+#                          Gated by WAYPOINT_GATE_ENABLED.
+#    Off-axis conjunction: Conjunction outside the corridor → +docking_reward × alignment_mult
+#                          (no fuel bonus).
 #    Max-range violation:  Inspector exceeds max_range_radius → +max_range_penalty (<0).
 #
 # ── WAYPOINT GATE  (optional)

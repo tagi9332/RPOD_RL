@@ -81,8 +81,7 @@ bskLogging.setDefaultLogLevel(bskLogging.BSK_ERROR)
 # ============================================================================
 # NAVIGATION-ERROR SENSITIVITY STUDY
 # ----------------------------------------------------------------------------
-# This is NOT a scenario Monte Carlo (that lives in the RSO-attitude / deputy-
-# position sweep elsewhere). Every scenario variable is pinned:
+# Every scenario variable is pinned:
 #   * epoch / Sun geometry / eclipse  -> world_args["utc_init"] = FIXED_EPOCH
 #   * RSO orbit + RSO attitude         -> drawn once from a fixed reset seed
 #   * deputy initial relative state    -> single fixed 6-vector
