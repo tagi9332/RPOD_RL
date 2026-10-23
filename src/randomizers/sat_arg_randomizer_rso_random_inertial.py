@@ -6,7 +6,7 @@ Randomizes the arguments for the RSO in an inertial frame.
 import numpy as np
 
 from Basilisk.utilities.orbitalMotion import elem2rv
-from Basilisk.utilities.RigidBodyKinematics import C2MRP
+from Basilisk.utilities.RigidBodyKinematics import C2MRP, MRP2C
 from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief
 
 from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL, INITIAL_APPROACH_VEL
@@ -77,7 +77,7 @@ class SatArgRandomizer:
         generate_new_rso = (self.mode == "train") or (not self._persistent_rso_state)
 
         if generate_new_rso:
-            a_meters = (R_EARTH * 1000) + np.random.uniform(400.0 * 1000, 600.0 * 1000)
+            a_meters = (R_EARTH * 1000) + np.random.uniform(35776.0*1000, 35796.0*1000)
             e = np.random.uniform(0.0, 0.0005)
             chief_orbit = random_orbit(a=a_meters / 1000.0, e=e)
 
@@ -88,13 +88,13 @@ class SatArgRandomizer:
                 "normal", "anti_normal",
             }
 
-            if self.rso_att_type in _INERTIAL_ATT_MODES:
-                r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
-                i_r = r_N / np.linalg.norm(r_N)
-                i_v = v_N / np.linalg.norm(v_N)
-                h_vec = np.cross(r_N, v_N)
-                i_n = h_vec / np.linalg.norm(h_vec)
+            r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
+            i_r = r_N / np.linalg.norm(r_N)
+            i_v = v_N / np.linalg.norm(v_N)
+            h_vec = np.cross(r_N, v_N)
+            i_n = h_vec / np.linalg.norm(h_vec)
 
+            if self.rso_att_type in _INERTIAL_ATT_MODES:
                 if self.rso_att_type == "velocity":
                     body_z = i_v
                 elif self.rso_att_type == "anti_velocity":
@@ -141,10 +141,15 @@ class SatArgRandomizer:
                 if np.linalg.norm(sigma_init) > 1:
                     sigma_init = -sigma_init / (np.linalg.norm(sigma_init) ** 2)
 
+            # Spin the RSO with the Hill frame (omega_HN = h/r^2 about orbit normal) so its
+            # attitude stays fixed relative to Hill instead of fixed inertially.
+            omega_HN_N = (np.linalg.norm(h_vec) / np.linalg.norm(r_N) ** 2) * i_n
+            omega_init = MRP2C(sigma_init) @ omega_HN_N
+
             self._persistent_rso_state = {
                 "chief_orbit": chief_orbit,
                 "sigma_init": sigma_init,
-                "omega_init": np.zeros(3),
+                "omega_init": omega_init,
             }
 
         chief_orbit = self._persistent_rso_state["chief_orbit"]

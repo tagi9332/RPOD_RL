@@ -8,7 +8,7 @@ SIM_DT = 1.0
 
 # Delta-V Action Limits
 MAX_DV = 0.5  # m/s
-DV_AVAILABLE_INIT = 50  # m/s — initial fuel budget
+DV_AVAILABLE_INIT = 150  # m/s — initial fuel budget
 MAX_DRIFT_DURATION = 60 #
 
 # Relative State Initialization Bounds

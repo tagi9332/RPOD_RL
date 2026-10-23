@@ -18,8 +18,8 @@ Ortolano's setup
 
 What this script does
 ---------------------
-Deploys the trained policy in the Basilisk env (degree-10 gravity + Sun, i.e.
-"with perturbations") from a nominal (undispersed) start and N_MC dispersed
+Deploys the trained policy in the Basilisk env
+from a nominal (undispersed) start and N_MC dispersed
 starts per p_r level, and records the delta-v and time it takes to first come
 within TARGET_RANGE (20 m) of the chief.  The episode is stopped there by
 default (STOP_AT_TARGET).  The largest approach-cone angle reached on the way
@@ -78,8 +78,6 @@ FIXED_EPOCH = "2018 SEP 29 21:00:00.000 (UTC)"
 # ============================================================================
 # SCENARIO DEFINITION - Ortolano 2018, Scenario 1 Case 3 Example 3, with dispersions
 # ============================================================================
-# Chief orbital elements, Table 13.2 (the thesis prints a as "7.07499742 km";
-# n = 1.06091165e-3 rad/s only works out for 7074.99742 km)
 CHIEF_OE = {
     "a": 7074.99742e3,     # [m]
     "e": 0.0,
@@ -89,20 +87,20 @@ CHIEF_OE = {
     "f": 0.78539816,       # [rad]
 }
 
-R0_REF_H = np.array([0.0, 100.0, 0.0])       # [m]   nominal initial Hill position (v-bar)
-V0_REF_H = np.zeros(3)                       # [m/s] nominal initial relative velocity
-TARGET_RANGE = 20.0                          # [m]   final desired position on the v-bar
-TF_REV = 0.6                                 # [rev] Ortolano's transfer time
-APPROACH_CONE_DEG = 20.0                     # [deg] Ortolano's approach cone half-angle
-STOP_AT_TARGET = True                        # end the episode at TARGET_RANGE
+R0_REF_H = np.array([0.0, 100.0, 0.0])
+V0_REF_H = np.zeros(3)
+TARGET_RANGE = 20.0
+TF_REV = 0.6
+APPROACH_CONE_DEG = 20.0
+STOP_AT_TARGET = True
 
-# Hold the RSO docking port on the +v-bar (LVLH-synchronous spin about orbit normal)
+# Hold the RSO docking port on the +v-bar
 RSO_LVLH_HOLD = True
 
-# Ortolano Example 3 nominal (Table 13.10 results): (dv_opt, dv_sim) [m/s]
+# Ortolano Example 3 nominal
 ORTOLANO_NOMINAL = (0.061, 0.062)
 
-# Ortolano Monte Carlo dv, p_r [%] -> [(dv_opt, dv_sim) per MC run] [m/s]
+# Ortolano Monte Carlo
 ORTOLANO_MC = {
     10.0: [  # Table 15.8
         (0.073, 0.074), (0.069, 0.069), (0.068, 0.068), (0.046, 0.047), (0.075, 0.076),
@@ -115,14 +113,14 @@ ORTOLANO_MC = {
 }
 MC_LEVELS = tuple(ORTOLANO_MC)
 
-# Colors (MATLAB default 'lines' color order)
+# Colors
 CASE_COLORS = {1: "#0072BD", 2: "#D95319", 3: "#EDB120", 4: "#7E2F8E", 5: "#77AC30"}
 RUN_COLORS = ["#0072BD", "#D95319", "#EDB120", "#7E2F8E", "#77AC30",
               "#4DBEEE", "#A2142F", "#000000", "#808080", "#FF00FF"]
-C_ORT_SIM = "#0072BD"   # MATLAB blue   - Ortolano simulation dv
-C_RL = "#D95319"        # MATLAB orange - RL policy (-> target)
-C_RL_STOP = "#EDB120"   # MATLAB yellow - RL policy (-> target + stop)
-C_ORT_OPT = "#7E2F8E"   # MATLAB purple - Ortolano RPO planner dv
+C_ORT_SIM = "#0072BD"
+C_RL = "#D95319"
+C_RL_STOP = "#EDB120"
+C_ORT_OPT = "#7E2F8E"
 C_INK = "#3a3a38"
 
 

@@ -1,102 +1,207 @@
 import os
 
+import numpy as np
+from Basilisk.architecture import sysModel
+from Basilisk.simulation import vizInterface
 from Basilisk.utilities import vizSupport
 from Basilisk.utilities import macros
 
 from resources import (
     approach_corridor_angle_deg,
     inspector_boresight,
+    docking_port_boresight,
 )
 
+# Visual-only sizes (do not affect the sim)
+CORRIDOR_CONE_HEIGHT = 200.0     # [m] docking corridor length drawn from the RSO port
+PORT_BORESIGHT_HEIGHT = 200.0    # [m] docking port boresight line length
+OPTICS_FOV_HALF_ANGLE_DEG = 20.0 # [deg] inspector sensor FOV half-angle
+OPTICS_FOV_HEIGHT = 30.0         # [m] inspector sensor FOV cone length
+OPTICS_BORESIGHT_HEIGHT = 50.0   # [m] inspector optics boresight line length
+BORESIGHT_HALF_ANGLE_DEG = 0.5   # [deg] near-zero cone angle used to draw a boresight "line"
+CAMERA_BORESIGHT_OFFSET = 2.0    # [m] camera offset along the boresight, past the solar array model
+
+# The recorder task is appended to RSODynProcess, the lowest-priority process in the sim
+# (World=300, Dyn=200, FSW=100, RSODyn=1), so it runs only after every spacecraft has been
+# propagated to the current time.
+VIZ_HOST_PROCESS = "RSODynProcess"
+
+
+def _vec(v):
+    return [float(x) for x in v]
+
+
+class _RangeRecorder(sysModel.SysModel):
+    """
+    Feeds the inspector-RSO range to a Vizard generic storage HUD panel (Vizard has no
+    free-text overlay). The bar maximum is the largest range seen so far.
+    """
+
+    def __init__(self, rso_sc, insp_sc):
+        super().__init__()
+        self.ModelTag = "vizRangeRecorder"
+        self.rso_sc = rso_sc
+        self.insp_sc = insp_sc
+
+        # VizSpacecraftData stores raw GenericStorage pointers, so the panel must be owned by
+        # something that outlives vizard_output(); this module is held by the sim's task list.
+        # The recorder serializes the panel's currentValue/maxValue each frame, so they are set
+        # directly (no input msg is linked).
+        self.panel = vizInterface.GenericStorage()
+        self.panel.label = "Range to RSO"
+        self.panel.units = "m"
+
+    def UpdateState(self, CurrentSimNanos):
+        r_rso = np.array(self.rso_sc.scStateOutMsg.read().r_BN_N)
+        r_insp = np.array(self.insp_sc.scStateOutMsg.read().r_BN_N)
+        rel_range = float(np.linalg.norm(r_insp - r_rso))
+
+        self.panel.currentValue = rel_range
+        self.panel.maxValue = max(self.panel.maxValue, rel_range)
+
+
 def vizard_output(env, output_folder, run_idx):
+    """
+    Attach a Vizard recorder to the current episode. Must be called after env.reset().
 
-    # 1. Grab the raw Basilisk simulator directly from the base env
+    Centers the camera on the inspector and shows relative motion in its Hill frame, the RSO docking
+    corridor and port boresight, the inspector optics boresight/FOV, and an inspector HUD panel
+    with the live inspector-RSO range.
+    """
     sim = env.simulator
-
-    # 2. Extract the C++ spacecraft objects so Vizard knows what to draw
     rso_sc = env.satellites[0].dynamics.scObject
     insp_sc = env.satellites[1].dynamics.scObject
-    sc_objects = [rso_sc, insp_sc]
+    rso_name = rso_sc.ModelTag
+    insp_name = insp_sc.ModelTag
 
-    # 3. Create a unique save path for this run's Vizard data
     viz_save_dir = os.path.abspath(os.path.join(output_folder, "vizard_data"))
     os.makedirs(viz_save_dir, exist_ok=True)
-    viz_filepath = os.path.join(viz_save_dir, f"run_{run_idx + 1}_vizard.bin") 
+    viz_filepath = os.path.join(viz_save_dir, f"run_{run_idx + 1}_vizard.bin")
 
-    # 4. Find a valid task name dynamically from the C++ core
-    task_names = [task.TaskPtr.TaskName for proc in sim.TotalSim.processList for task in proc.processTasks]
-    viz_task_name = next((name for name in task_names if 'dyn' in name.lower()), task_names[0])
+    # Each satellite has its own dynamics process. Recording from inside one of them
+    # (e.g. DynamicsTaskRSO) logs the other spacecraft one step stale, which at orbital
+    # speed shows up as a ~7.5 km along-track offset between the chief and deputy path.
+    # Creating a new process here instead would need TotalSim.assignRemainingProcs() since the
+    # sim is already initialized, and that deadlocks the simulator teardown on the next reset.
+    viz_proc = next(p for p in sim.procList if p.Name == VIZ_HOST_PROCESS)
+    viz_task_name = "VizardTask"
+    viz_proc.addTask(sim.CreateNewTask(viz_task_name, macros.sec2nano(sim.sim_rate)))
 
-    # 5. Enable the recorder and capture the viz module object
+    # vizSupport keeps standard cameras and instrument GUI settings in module-level lists that
+    # enableUnityVisualization does not clear, so they would pile up across runs in the same worker.
+    del vizSupport.stdCameraList[:]
+    del vizSupport.instrumentGuiSettingList[:]
+
+    # Relative range readout. Higher priority than the Vizard recorder (default -1) so the
+    # range is updated before the recorder serializes it in the same step.
+    range_recorder = _RangeRecorder(rso_sc, insp_sc)
+    sim.AddModelToTask(viz_task_name, range_recorder, 100)
+
     viz = vizSupport.enableUnityVisualization(
-        sim, 
-        viz_task_name, 
-        sc_objects, 
-        saveFile=viz_filepath
+        sim,
+        viz_task_name,
+        [rso_sc, insp_sc],
+        saveFile=viz_filepath,
+        genericStorageList=[None, [range_recorder.panel]],
     )
 
-    # --- THE OVERHAUL: RPO & DOCKING VISUALS ---
+    # Correct date for Earth orientation / lighting
+    viz.epochInMsg.subscribeTo(sim.world.gravFactory.epochMsg)
 
-    # A. Trajectory & Relative Motion
+    # A. Trajectory & relative motion (Hill frame)
+    # The relative-orbit chief defaults to the camera target (Inspector), so relative lines show
+    # the RSO path about the Inspector; switch the chief to the RSO in Vizard's GUI if needed.
+    # Don't set liveSettings.relativeOrbitChief: Vizard's chief dropdown throws a
+    # NullReferenceException on it (at load it leaves only a blank background).
     viz.settings.orbitLinesOn = 2              # 2 = Relative to chief spacecraft
     viz.settings.trueTrajectoryLinesOn = 2     # 2 = True path relative to chief
-    viz.settings.relativeOrbitFrame = 1        # 1 = Use Hill Frame (Standard for RPO)
-    viz.settings.showHillFrame = 1             # Draw the Hill frame axes (Radial, Along-track, Cross-track)
-    viz.settings.relativeOrbitChief = rso_sc.ModelTag # Set RSO as the center of the universe
+    viz.settings.relativeOrbitFrame = 1        # 1 = Hill frame
+    viz.settings.showHillFrame = 1             # Hill frame of the camera target (Inspector)
+    viz.settings.mainCameraTarget = insp_name  # Center the view on the Inspector
 
-    # B. Spacecraft Frames & Labels
+    # B. Spacecraft frames & labels
     viz.settings.showSpacecraftLabels = 1
-    viz.settings.spacecraftCSon = 1            # Show local X, Y, Z axes of the spacecraft
-    viz.settings.showCSLabels = 1              # Label those axes (helps align docking ports)
+    viz.settings.spacecraftCSon = 1            # Body axes (shows attitude of both vehicles)
+    viz.settings.showCSLabels = 1
 
-    # C. Camera & HUD Settings
-    viz.settings.mainCameraTarget = insp_sc.ModelTag # Focus the camera on your RL agent
-    viz.settings.viewCameraBoresightHUD = 1    # Draws a line out the front of your camera
-    viz.settings.viewCameraFrustumHUD = 1      # Draws the sensor cone
-    viz.settings.showDataRateDisplay = -1      # Hide clutter
-    viz.settings.ambient = 0.5                 # Brighten the dark side of the spacecraft a bit
+    # C. HUD settings
+    vizSupport.setInstrumentGuiSetting(viz, spacecraftName=insp_name, showGenericStoragePanel=1)
+    viz.settings.viewCameraBoresightHUD = 1
+    viz.settings.viewCameraFrustumHUD = 1
+    viz.settings.showDataRateDisplay = -1
+    viz.settings.ambient = 0.5
 
-    # 1. The Docking Keep-In Corridor
-    # createConeInOut draws a physical cone and checks the angle between the 
-    # normal vector and the vector to the target body.
+    # --- RSO (chief) ---
+
+    # 1. Docking keep-in corridor; turns on/off as the inspector enters/leaves it
     vizSupport.createConeInOut(viz,
-        fromBodyName=rso_sc.ModelTag,      # Cone originates from the RSO
-        toBodyName=insp_sc.ModelTag,       # Evaluates if the Inspector is inside it
-        normalVector_B=[0, 0, 1],    # Direction of the RSO's docking port (+X axis)
-        incidenceAngle=approach_corridor_angle_deg * macros.D2R,  # 15-degree half-angle safe approach corridor
-        coneHeight=200.0,                  # Draw the cone out to 200 meters
-        coneColor="green", 
-        isKeepIn=True,                     # True = Keep-In cone
+        fromBodyName=rso_name,
+        toBodyName=insp_name,
+        normalVector_B=_vec(docking_port_boresight),
+        incidenceAngle=approach_corridor_angle_deg * macros.D2R,
+        coneHeight=CORRIDOR_CONE_HEIGHT,
+        coneColor=vizSupport.toRGBA255("green", alpha=0.25),
+        isKeepIn=True,
         coneName="dockingCorridor"
     )
 
-    # 2. Inspector Sensor Boresight
+    # 2. Docking port boresight
     vizSupport.createConeInOut(viz,
-        fromBodyName=insp_sc.ModelTag,     # Originates from Inspector
-        toBodyName=rso_sc.ModelTag,        # Evaluates if RSO is within the FOV
-        normalVector_B=inspector_boresight,    # Assuming Inspector sensor points along its +X
-        incidenceAngle=20.0 * macros.D2R,  # 20-degree half-angle FOV
-        coneHeight=30,                  # Max range of the sensor
-        coneColor="cyan",
-        isKeepIn=True,                     
-        coneName="sensorBoresight"
+        fromBodyName=rso_name,
+        toBodyName=insp_name,
+        normalVector_B=_vec(docking_port_boresight),
+        incidenceAngle=BORESIGHT_HALF_ANGLE_DEG * macros.D2R,
+        coneHeight=PORT_BORESIGHT_HEIGHT,
+        coneColor="lime",
+        isKeepIn=True,
+        coneName="portBoresight"
     )
 
-    # 3. Dynamic Sun Vector
-    # Draws a line constantly pointing from the Inspector to the Sun.
-    vizSupport.createPointLine(viz,
-        fromBodyName=insp_sc.ModelTag,
-        toBodyName="sun",                  # Vizard recognizes "sun" natively
-        lineColor="yellow" 
+    # --- Inspector (deputy) ---
+
+    # 3. Optics boresight
+    vizSupport.createConeInOut(viz,
+        fromBodyName=insp_name,
+        toBodyName=rso_name,
+        normalVector_B=_vec(inspector_boresight),
+        incidenceAngle=BORESIGHT_HALF_ANGLE_DEG * macros.D2R,
+        coneHeight=OPTICS_BORESIGHT_HEIGHT,
+        coneColor="magenta",
+        isKeepIn=True,
+        coneName="opticsBoresight"
     )
 
-    # 4. Target Vector 
-    # Draws a line from the Inspector directly to the RSO.
-    vizSupport.createPointLine(viz,
-        fromBodyName=insp_sc.ModelTag,
-        toBodyName=rso_sc.ModelTag,
-        lineColor="white"     
+    # 4. Optics FOV; turns on/off as the RSO enters/leaves the FOV
+    vizSupport.createConeInOut(viz,
+        fromBodyName=insp_name,
+        toBodyName=rso_name,
+        normalVector_B=_vec(inspector_boresight),
+        incidenceAngle=OPTICS_FOV_HALF_ANGLE_DEG * macros.D2R,
+        coneHeight=OPTICS_FOV_HEIGHT,
+        coneColor=vizSupport.toRGBA255("cyan", alpha=0.25),
+        isKeepIn=True,
+        coneName="opticsFOV"
     )
 
-    # 6. Initialize memory without wiping RL states
+    # 5. Inspector -> Sun and Inspector -> RSO lines (the angle between them is the sun angle)
+    vizSupport.createPointLine(viz, fromBodyName=insp_name, toBodyName="sun", lineColor="yellow")
+    vizSupport.createPointLine(viz, fromBodyName=insp_name, toBodyName=rso_name, lineColor="white")
+
+    # 6. Camera view through the inspector optics
+    # A zero position_B makes Vizard auto-place the camera off-axis; an explicit offset along the
+    # boresight keeps the frustum centered on it while clearing the spacecraft and solar arrays.
+    boresight_hat = np.asarray(inspector_boresight, dtype=float)
+    boresight_hat /= np.linalg.norm(boresight_hat)
+    vizSupport.createStandardCamera(viz,
+        spacecraftName=insp_name,
+        setMode=1,
+        pointingVector_B=_vec(boresight_hat),
+        position_B=_vec(CAMERA_BORESIGHT_OFFSET * boresight_hat),
+        fieldOfView=2 * OPTICS_FOV_HALF_ANGLE_DEG * macros.D2R,
+        displayName="Inspector Optics"
+    )
+
+    # Initialize memory without wiping RL states
     viz.Reset(0)
+
+    return viz

@@ -402,7 +402,7 @@ if __name__ == "__main__":
     os.makedirs(output_folder, exist_ok=True)
 
     # --------------------------- Model Path Configuration ---------------------------
-    model_path = r"models\MC_Model.zip"
+    model_path = r"models\training_run_2026-10-22_13-03-53\final_model.zip"
     #---------------------------------------------------------------------------------
 
     # Number of Monte Carlo runs and workers

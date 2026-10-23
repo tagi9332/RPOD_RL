@@ -175,11 +175,12 @@ if __name__ == "__main__":
 
     # Config
     n_steps_per_env = 512
-    total_timesteps = 40_000_000 
+    total_timesteps = 4_000_000 
     
     # Create multi-core training env
     env = SubprocVecEnv([make_env(i, seed=0) for i in range(num_cpu)])
 
+    # Create evaluation env (fixed RSO orbit via mode='test', diverse inspector starts)
     # Create evaluation env (fixed RSO orbit via mode='test', diverse inspector starts)
     eval_env = DummyVecEnv([make_eval_env(seed=42)])    
 
@@ -305,6 +306,6 @@ if __name__ == "__main__":
     
     finally:
         # Final Save
-        model_save_path = os.path.join(model_path, "rpo_min_dv_spec.zip")
+        model_save_path = os.path.join(model_path, "final_model.zip")
         model.save(model_save_path)
         print(f"Training Complete. Model saved as {model_save_path}")

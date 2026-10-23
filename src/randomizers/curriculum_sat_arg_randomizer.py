@@ -4,7 +4,7 @@ Stage-aware satellite argument randomizer for 3-stage reverse curriculum.
 """
 import numpy as np
 from Basilisk.utilities.orbitalMotion import elem2rv
-from Basilisk.utilities.RigidBodyKinematics import C2MRP
+from Basilisk.utilities.RigidBodyKinematics import C2MRP, MRP2C
 from bsk_rl.utils.orbital import random_orbit, random_unit_vector, relative_to_chief
 
 from resources import R_EARTH, MIN_REL_POS, MAX_REL_POS, MIN_REL_VEL, MAX_REL_VEL, INITIAL_APPROACH_VEL
@@ -46,7 +46,7 @@ class CurriculumSatArgRandomizer:
     def _sample_rso_state(self) -> dict:
         a = (R_EARTH * 1000) + np.random.uniform(35_776e3, 35_796e3)
         e = np.random.uniform(0.0, 0.0005)
-        chief_orbit = random_orbit(a=a, e=e)
+        chief_orbit = random_orbit(a=a / 1000.0, e=e)  # random_orbit() expects km
 
         r_N, v_N = elem2rv(MU_EARTH, chief_orbit)
 
@@ -87,10 +87,16 @@ class CurriculumSatArgRandomizer:
             if np.linalg.norm(sigma_init) > 1:
                 sigma_init = -sigma_init / np.linalg.norm(sigma_init) ** 2
 
+        # Spin the RSO with the Hill frame (omega_HN = h/r^2 about orbit normal) so its
+        # attitude stays fixed relative to Hill instead of fixed inertially.
+        h_vec = np.cross(r_N, v_N)
+        omega_HN_N = (np.linalg.norm(h_vec) / np.linalg.norm(r_N) ** 2) * (h_vec / np.linalg.norm(h_vec))
+        omega_init = MRP2C(sigma_init) @ omega_HN_N
+
         return {
             "chief_orbit": chief_orbit,
             "sigma_init": sigma_init,
-            "omega_init": np.zeros(3),
+            "omega_init": omega_init,
         }
 
     def __call__(self, satellites):
