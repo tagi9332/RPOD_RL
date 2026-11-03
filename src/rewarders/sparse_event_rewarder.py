@@ -16,9 +16,6 @@ from resources import (
     max_range_penalty,
     approach_corridor_angle_deg,
     docking_port_boresight,
-    fuel_bonus_max,
-    fuel_bonus_baseline,
-    DV_AVAILABLE_INIT,
 )
 
 logger = logging.getLogger(__name__)
@@ -137,15 +134,8 @@ class SparseEventReward(GlobalReward):
                     scaled_reward = docking_reward * alignment_mult
                     r += scaled_reward
 
-                    # Fuel efficiency bonus — only on true docking (within corridor)
-                    fuel_bonus = 0.0
-                    if angle <= self.corridor_angle_deg and DV_AVAILABLE_INIT > fuel_bonus_baseline:
-                        fuel_frac = max(0.0, data.dv_remaining - fuel_bonus_baseline) / (DV_AVAILABLE_INIT - fuel_bonus_baseline)
-                        fuel_bonus = fuel_bonus_max * fuel_frac
-                        r += fuel_bonus
-
                     label = "DOCKING" if angle <= self.corridor_angle_deg else "CONJUNCTION"
-                    logger.info(f"{label}: angle={angle:.1f}° reward={scaled_reward:.2f} fuel_bonus={fuel_bonus:.2f} dv_rem={data.dv_remaining:.1f}m/s")
+                    logger.info(f"{label}: angle={angle:.1f}° reward={scaled_reward:.2f} dv_rem={data.dv_remaining:.1f}m/s")
 
             if data.range_violated:
                 r -= max_range_penalty

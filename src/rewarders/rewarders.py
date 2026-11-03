@@ -96,11 +96,10 @@ from resources import (
 #  SparseEventReward       Three one-shot events detected on state transitions.
 #                          Docking / conjunction ends Phase 3 at CONJUNCTION_RADIUS (5 m):
 #    Docking success:      Conjunction within approach_corridor_angle_deg of the
-#                          docking port boresight → +docking_reward × alignment_mult
-#                          + fuel bonus, where alignment_mult = 1 - angle/180.
+#                          docking port boresight → +docking_reward × alignment_mult,
+#                          where alignment_mult = 1 - angle/180.
 #                          Gated by WAYPOINT_GATE_ENABLED.
-#    Off-axis conjunction: Conjunction outside the corridor → +docking_reward × alignment_mult
-#                          (no fuel bonus).
+#    Off-axis conjunction: Conjunction outside the corridor → +docking_reward × alignment_mult.
 #    Max-range violation:  Inspector exceeds max_range_radius → −max_range_penalty.
 #
 # ── WAYPOINT GATE  (optional)
@@ -128,7 +127,7 @@ def get_rewarders(dv_weight=None):
     return (
         DeltaVReward(
             reward_weight=dv_weight if dv_weight is not None else dv_reward_weight,
-            exponent=2.0,
+            exponent=1.0,
         ),
         WaypointPhaseReward(gate=gate),
         DockingCorridorReward(

@@ -20,10 +20,6 @@ time_penalty_weight=10
 # Illumination Reward
 illumination_weight=0.0025
 
-# Fuel Efficiency Bonus (applied at successful docking)
-fuel_bonus_max = 5
-fuel_bonus_baseline = 130.0  # m/s — expected floor; anything below earns nothing
-
 # WaypointPhaseReward
 # Same log-MSE formulation as RelativeRangeLogReward; replaces it entirely.
 waypoint_pos_weight = 0.0003        # log-MSE alpha, applied as -weight * log(MSE) (same as rel_range_log_weight)

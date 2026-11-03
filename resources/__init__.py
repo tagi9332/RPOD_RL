@@ -13,8 +13,6 @@ from .weights import (
     vel_weight_phase0,
     vel_onset_range,
     vel_weight_phase1,
-    fuel_bonus_max,
-    fuel_bonus_baseline,
 )
 from .hyperparameters import (
     learning_rate,
