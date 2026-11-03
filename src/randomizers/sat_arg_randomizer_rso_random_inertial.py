@@ -194,7 +194,7 @@ def make_sat_arg_randomizer(
     dv_weight_mean: float | None = None,
     dv_weight_std: float = 0.05,
     dv_weight_min: float = 0.0,
-    use_original_vel_dist: bool = False,
+    use_original_vel_dist: bool = True,
 ) -> SatArgRandomizer:
     """Factory — returns a SatArgRandomizer instance (callable, mutable)."""
     return SatArgRandomizer(

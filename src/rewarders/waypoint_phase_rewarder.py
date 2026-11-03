@@ -1,12 +1,12 @@
 """
-Two-phase body-frame rewarder for docking with an RSO at arbitrary attitude.
+Two-part body-frame rewarder for docking with an RSO at arbitrary attitude.
 
-Phase 0  —  approach to 30 m body-fixed standoff waypoint.
+Part 0  —  approach to 30 m body-fixed standoff waypoint.
              Dense:  log-MSE of position error to waypoint.
              Vel:    proximity-scaled braking penalty (zero when far, grows near waypoint).
              Sparse: one-time bonus on first entering the capture sphere.
 
-Phase 1  —  final ingress from standoff to docking port.
+Part 1  —  final ingress from standoff to docking port.
              Dense:  log-MSE of position error to docking port (body-frame origin).
              Vel:    always-on, stronger penalty to enforce controlled ingress.
 
