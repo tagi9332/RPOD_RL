@@ -76,9 +76,9 @@ class RelativeRangeLogReward(GlobalReward):
         Logarithmic reward for proximity operations.
         
         Args:
-            alpha: Scaling factor for the log reward.
+            alpha: Positive scaling factor for the log reward (reward = -alpha * log(MSE)).
             delta_x_max: Normalization constants [x, y, z, vx, vy, vz].
-            final_docking_distance: Distance threshold (meters) to start penalizing velocity more heavily.
+            final_docking_distance: Phase 3 entry range (meters); velocity is penalized more heavily inside it.
             velocity_weight: Multiplier applied to velocity errors when inside the final docking distance.
         """
         super().__init__()
@@ -111,16 +111,17 @@ class RelativeRangeLogReward(GlobalReward):
                     distance = np.linalg.norm(state[:3])
                     
                     if distance > self.docking_phase_range_threshold:
-                        # If we're outside the docking phase threshold, we can apply the velocity weight
-                        normalized[3:] = 0.0  # Don't penalize velocity during approach phase
+                        # Phase 1 (long-range rendezvous, > 500 m)
+                        normalized[3:] = 0.0  # Don't penalize velocity during Phase 1
 
                     elif distance < self.final_docking_distance:
-                        # Multiply the velocity components (indices 3, 4, 5) by the weight
+                        # Phase 3 (terminal ingress and docking, < 30 m):
+                        # multiply the velocity components (indices 3, 4, 5) by the weight
                         normalized[3:] *= self.velocity_weight
 
                     # Calculate MSE and log reward
                     mse = np.mean(normalized**2)
-                    reward[sat_id] = float(self.alpha * np.log(mse + 1e-8))
+                    reward[sat_id] = float(-self.alpha * np.log(mse + 1e-8))
 
                     # Debug prints
                     logger.debug(f"Reward Calculation for {sat_id}: distance={distance:.2f}, mse={mse}, reward={reward[sat_id]}")

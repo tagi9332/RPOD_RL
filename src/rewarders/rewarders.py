@@ -24,25 +24,22 @@ from resources import (
 # ============================================================
 #
 # The reward is composed of six components that together define a
-# hierarchical MDP over two spatial phases and a terminal event layer.
+# hierarchical MDP over three spatial phases and a terminal event layer:
 #
-# ── PHASE 0: Long-range approach  (Inspector > WAYPOINT_CAPTURE_RADIUS from waypoint)
+#   Phase 1  Long-range rendezvous          initial location (~1000–1200 m) → 500 m
+#   Phase 2  Close-range waypoint navigation 500 m → 30 m
+#   Phase 3  Terminal ingress and docking    30 m → 5 m (CONJUNCTION_RADIUS)
+#
+# Phase 1 → 2 is not a latched state: range-gated terms (IlluminationReward,
+# DockingCorridorReward, the waypoint braking ramp) switch on/off at 500 m from the
+# instantaneous range. Phase 2 → 3 is latched inside WaypointPhaseReward the first
+# time range < PHASE_TRANSITION_RANGE (30 m).
+#
+# Internal flag mapping: WaypointPhaseData.phase == 0 during Phases 1–2 and == 1
+# during Phase 3. vel_weight_phase0 / vel_weight_phase1 follow the same convention.
+#
+# ── ALL PHASES
 # ──────────────────────────────────────────────────────────────────────────────────────
-#  IlluminationReward      Active only when range > illumination_cutoff_range.
-#                          Rewards approaching from the sunlit side of the RSO within
-#                          a cone_angle_deg (60°) of the sun direction; penalises
-#                          outside that cone proportionally to the angular deviation.
-#
-#  WaypointPhaseReward     Dense log-MSE of body-frame position error to the 30 m
-#  (Phase 0, dense)        body-fixed standoff waypoint, normalised by MAX_REL_POS.
-#                          Velocity braking term is proximity-scaled: zero when far
-#                          from the waypoint, ramping to full weight at vel_onset_range.
-#
-#  DockingCorridorReward   Active only when range < docking_phase_range_threshold.
-#                          Rewards corridor alignment proportionally to (cosθ − cos_limit)
-#                          / (1 − cos_limit); penalises outside the corridor scaled by
-#                          both angular deviation and proximity to the RSO.
-#
 #  DeltaVReward            −weight × |Δv|² applied on every step a burn is executed.
 #                          Quadratic scaling discourages large impulsive manoeuvres.
 #
@@ -51,41 +48,70 @@ from resources import (
 #                          end. Integrates to exactly −max_episode_penalty over a
 #                          full episode regardless of drift step sizes.
 #
-# ── PHASE TRANSITION: Waypoint capture
+# ── PHASE 1: Long-range rendezvous  (initial location → 500 m)
 # ──────────────────────────────────────────────────────────────────────────────────────
-#  WaypointPhaseReward     One-time sparse bonus (waypoint_sparse_reward) awarded on
-#  (sparse)                the single step the Inspector first enters the WAYPOINT_CAPTURE_RADIUS
-#                          (5 m) sphere around the body-fixed standoff point. Phase is
-#                          latched — the Inspector stays in Phase 1 for the remainder
-#                          of the episode even if it exits the sphere.
+#  IlluminationReward      Active only when range > illumination_cutoff_range (500 m).
+#                          Rewards approaching from the sunlit side of the RSO within
+#                          a cone_angle_deg (60°) of the sun direction; penalises
+#                          outside that cone proportionally to the angular deviation.
 #
-# ── PHASE 1: Terminal ingress  (after waypoint capture)
+#  WaypointPhaseReward     Dense log-MSE of body-frame position error to the 30 m
+#  (dense, position only)  body-fixed standoff waypoint, normalised by MAX_REL_POS.
+#                          No velocity term — the braking ramp is zero beyond
+#                          vel_onset_range (500 m) from the waypoint.
+#
+# ── PHASE 2: Close-range waypoint navigation  (500 m → 30 m)
+# ──────────────────────────────────────────────────────────────────────────────────────
+#  WaypointPhaseReward     Same dense log-MSE to the 30 m standoff waypoint. Velocity
+#  (dense, braking)        braking term ramps linearly from zero at vel_onset_range
+#                          to full weight (vel_weight_phase0) at the waypoint.
+#
+#  DockingCorridorReward   Active only when range < docking_phase_range_threshold (500 m),
+#                          through Phases 2 and 3. Rewards corridor alignment
+#                          proportionally to (cosθ − cos_limit) / (1 − cos_limit);
+#                          penalises outside the corridor scaled by both angular
+#                          deviation and proximity to the RSO.
+#
+# ── PHASE 2 → 3 TRANSITION: Relative range
+# ──────────────────────────────────────────────────────────────────────────────────────
+#  WaypointPhaseReward     Phase 3 begins the first step the Inspector's relative range
+#  (sparse)                to the docking port drops below PHASE_TRANSITION_RANGE (30 m),
+#                          from any direction. One-time sparse bonus (waypoint_sparse_reward)
+#                          on that step, scaled by transverse offset from the boresight
+#                          axis (zero at ≥ WAYPOINT_CAPTURE_RADIUS). Phase is latched —
+#                          the Inspector stays in Phase 3 for the remainder of the
+#                          episode even if it moves back out.
+#
+# ── PHASE 3: Terminal ingress and docking  (30 m → 5 m)
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  WaypointPhaseReward     Dense log-MSE of body-frame position error to the docking
-#  (Phase 1, dense)        port (RSO body-frame origin), normalised by STANDOFF_DISTANCE.
+#  (dense)                 port (RSO body-frame origin), normalised by PHASE_TRANSITION_RANGE.
 #                          Velocity penalty is always-on and uses a stronger weight
 #                          (vel_weight_phase1) to enforce controlled final ingress.
 #
+#  DockingCorridorReward   Continues from Phase 2 (see above).
+#
 # ── TERMINAL EVENTS  (fire once, end episode)
 # ──────────────────────────────────────────────────────────────────────────────────────
-#  SparseEventReward       Three one-shot events detected on state transitions:
+#  SparseEventReward       Three one-shot events detected on state transitions.
+#                          Docking / conjunction ends Phase 3 at CONJUNCTION_RADIUS (5 m):
 #    Docking success:      Conjunction within approach_corridor_angle_deg of the
 #                          docking port boresight → +docking_reward × alignment_mult
 #                          + fuel bonus, where alignment_mult = 1 - angle/180.
 #                          Gated by WAYPOINT_GATE_ENABLED.
 #    Off-axis conjunction: Conjunction outside the corridor → +docking_reward × alignment_mult
 #                          (no fuel bonus).
-#    Max-range violation:  Inspector exceeds max_range_radius → +max_range_penalty (<0).
+#    Max-range violation:  Inspector exceeds max_range_radius → −max_range_penalty.
 #
 # ── WAYPOINT GATE  (optional)
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  When WAYPOINT_GATE_ENABLED = True, the docking bonus in SparseEventReward is
-#  blocked unless WaypointPhaseReward has recorded a Phase 1 transition for that
-#  satellite (i.e. the waypoint was physically captured during the episode).
+#  blocked unless WaypointPhaseReward has recorded a Phase 3 entry for that
+#  satellite (i.e. the Inspector crossed PHASE_TRANSITION_RANGE during the episode).
 #
 # ============================================================
 
-# Set to True to require waypoint capture before the docking bonus is awarded.
+# Set to True to require Phase 3 entry before the docking bonus is awarded.
 WAYPOINT_GATE_ENABLED = False
 
 

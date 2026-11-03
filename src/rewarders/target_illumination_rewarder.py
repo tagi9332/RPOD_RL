@@ -57,7 +57,8 @@ class IlluminationDataStore(DataStore):
 class IlluminationReward(GlobalReward):
     """
     Rewards the Inspector for approaching the RSO from the sunlit side within a specific cone.
-    Active only when the Inspector is further than the cutoff_range.
+    Active only during Phase 1 (long-range rendezvous), i.e. when the Inspector is
+    further than the cutoff_range (illumination_cutoff_range, 500 m).
     """
     data_store_type = IlluminationDataStore
 

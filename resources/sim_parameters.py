@@ -25,12 +25,16 @@ CONJUNCTION_RADIUS = 5  # meters
 approach_corridor_angle_deg=30 # 180° corresponds to no corridor constraint; all conjunctions count as dockings
 
 # Phase Transition Parameters
-docking_phase_range_threshold=500
-final_docking_distance=30
+# Phase 1: long-range rendezvous (initial → 500 m), Phase 2: close-range waypoint
+# navigation (500 → 30 m), Phase 3: terminal ingress and docking (30 → 5 m)
+docking_phase_range_threshold=500  # m — Phase 1 → 2 boundary
+final_docking_distance=30          # m — Phase 2 → 3 boundary (legacy RelativeRangeLogReward)
 
 # Waypoint Phase Parameters
 STANDOFF_DISTANCE = 30.0      # m — body-fixed waypoint distance from docking port
-WAYPOINT_CAPTURE_RADIUS = 10.0  # m — sphere radius that triggers Phase 0→1 transition
+WAYPOINT_CAPTURE_RADIUS = 10.0  # m — transverse offset from boresight at which the Phase 3 entry bonus reaches zero
+PHASE_TRANSITION_RANGE = 30.0 # m — relative range that triggers Phase 2→3 transition
+# PHASE_TRANSITION_RANGE = STANDOFF_DISTANCE + WAYPOINT_CAPTURE_RADIUS  # m — relative range that triggers Phase 2→3 transition
 VEL_NORM = 1.0                # m/s — body-frame velocity normalization in reward
 
 # Satellite Boresights
@@ -39,7 +43,7 @@ docking_port_boresight = np.array([0.0, 0.0, 1.0])
 
 # Illumination Reward Parameters
 sun_illumination_cone_angle_deg = 60
-illumination_cutoff_range = 500
+illumination_cutoff_range = 500  # m — illumination reward active in Phase 1 only (range > this)
 
 # --- CONFIGURATION DICTIONARIES ---
 rso_sat_args = dict(

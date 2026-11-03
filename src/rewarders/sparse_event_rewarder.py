@@ -105,8 +105,9 @@ class SparseEventReward(GlobalReward):
     Computes terminal/event rewards inside the BSK-RL GlobalReward framework.
 
     Events handled:
-      - Conjunction: +docking_reward * (1 - angle/180), max at 0° boresight alignment, 0 at 180°
-      - Max-range violation: +max_range_penalty
+      - Conjunction (ends Phase 3 at CONJUNCTION_RADIUS, 5 m):
+        +docking_reward * (1 - angle/180), max at 0° boresight alignment, 0 at 180°
+      - Max-range violation: -max_range_penalty
     """
     data_store_type = SparseEventDataStore
 
@@ -130,7 +131,7 @@ class SparseEventReward(GlobalReward):
             if data.conjunction_angle_deg is not None:
                 angle = data.conjunction_angle_deg
                 if self.waypoint_gate is not None and not self.waypoint_gate.waypoint_captured(sat_id):
-                    logger.info(f"DOCKING BLOCKED (waypoint not captured) for {sat_id}: angle={angle:.1f}°")
+                    logger.info(f"DOCKING BLOCKED (Phase 3 not entered) for {sat_id}: angle={angle:.1f}°")
                 else:
                     alignment_mult = max(0.0, 1.0 - angle / 180.0)
                     scaled_reward = docking_reward * alignment_mult
@@ -147,8 +148,8 @@ class SparseEventReward(GlobalReward):
                     logger.info(f"{label}: angle={angle:.1f}° reward={scaled_reward:.2f} fuel_bonus={fuel_bonus:.2f} dv_rem={data.dv_remaining:.1f}m/s")
 
             if data.range_violated:
-                r += max_range_penalty
-                logger.info(f"MAX RANGE VIOLATION: penalty={max_range_penalty}")
+                r -= max_range_penalty
+                logger.info(f"MAX RANGE VIOLATION: penalty={-max_range_penalty}")
 
             rewards[sat_id] = r
 

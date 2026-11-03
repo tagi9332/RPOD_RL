@@ -45,5 +45,6 @@ from .sim_parameters import (
     final_docking_distance,
     STANDOFF_DISTANCE,
     WAYPOINT_CAPTURE_RADIUS,
+    PHASE_TRANSITION_RANGE,
     VEL_NORM,
 )

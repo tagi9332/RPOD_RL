@@ -69,6 +69,9 @@ class DockingCorridorReward(GlobalReward):
     """
     Rewards/penalizes the Inspector for corridor alignment within a cutoff range.
 
+    Active during Phase 2 (close-range waypoint navigation, 500 m → 30 m) and
+    Phase 3 (terminal ingress and docking, 30 m → 5 m), i.e. whenever range <
+    cutoff_range (docking_phase_range_threshold, 500 m). Inactive in Phase 1.
     """
     data_store_type = DockingCorridorDataStore
 
@@ -123,7 +126,7 @@ class DockingCorridorReward(GlobalReward):
                         positive_reward = abs(self.weight) * alignment_score
                         reward[sat_id] = float(positive_reward * dt_scale)
                 else:
-                    # Outside cutoff range (or perfectly at origin)
+                    # Phase 1 (outside cutoff range) or perfectly at origin
                     reward[sat_id] = 0.0
             else:
                 reward[sat_id] = 0.0

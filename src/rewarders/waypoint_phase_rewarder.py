@@ -1,17 +1,27 @@
 """
-Two-part body-frame rewarder for docking with an RSO at arbitrary attitude.
+Body-frame guidance rewarder for docking with an RSO at arbitrary attitude.
 
-Part 0  —  approach to 30 m body-fixed standoff waypoint.
-             Dense:  log-MSE of position error to waypoint.
-             Vel:    proximity-scaled braking penalty (zero when far, grows near waypoint).
-             Sparse: one-time bonus on first entering the capture sphere.
+Covers all three mission phases:
 
-Part 1  —  final ingress from standoff to docking port.
+Phase 1  —  long-range rendezvous (initial location → 500 m).
+             Dense:  log-MSE of position error to the 30 m body-fixed standoff waypoint.
+             Vel:    none — braking ramp is zero beyond vel_onset_range from the waypoint.
+
+Phase 2  —  close-range waypoint navigation (500 m → 30 m).
+             Dense:  same log-MSE of position error to the standoff waypoint.
+             Vel:    proximity-scaled braking penalty (zero at vel_onset_range, full at waypoint).
+             Sparse: one-time bonus on first crossing PHASE_TRANSITION_RANGE (entry to Phase 3).
+
+Phase 3  —  terminal ingress and docking (30 m → 5 m).
              Dense:  log-MSE of position error to docking port (body-frame origin).
              Vel:    always-on, stronger penalty to enforce controlled ingress.
 
-Phase is latched: once the Inspector enters the capture sphere it stays in Phase 1
-for the rest of the episode, preventing reward oscillation if it briefly exits.
+Phases 1 and 2 share the same reward branch (internal flag phase == 0) and differ only
+in whether the braking ramp is active. The Phase 2 → 3 transition (internal flag
+phase == 1) is based on relative range only: the Inspector enters Phase 3 the first
+time ||r_DC_C|| < PHASE_TRANSITION_RANGE, regardless of approach direction.
+Phase 3 is latched: once entered it holds for the rest of the episode, preventing
+reward oscillation if the Inspector briefly moves back out.
 """
 
 import logging
@@ -23,10 +33,11 @@ from Basilisk.utilities.RigidBodyKinematics import MRP2C
 
 
 class WaypointGate:
-    """Shared state tracking the current waypoint phase per satellite.
+    """Shared state tracking the internal phase flag per satellite.
 
-    WaypointPhaseReward writes the phase on every step; SparseEventReward
-    reads it to gate the docking bonus on waypoint capture.
+    WaypointPhaseReward writes the flag on every step (0 = Phases 1–2,
+    1 = Phase 3); SparseEventReward reads it to gate the docking bonus on
+    Phase 3 entry.
     """
     def __init__(self) -> None:
         self._phase: dict[str, int] = {}
@@ -45,6 +56,7 @@ from resources import (
     vel_weight_phase1,
     STANDOFF_DISTANCE,
     WAYPOINT_CAPTURE_RADIUS,
+    PHASE_TRANSITION_RANGE,
     VEL_NORM,
     MAX_REL_POS,
     docking_port_boresight,
@@ -100,7 +112,7 @@ class WaypointPhaseDataStore(DataStore):
         self._ever_captured: bool = False
 
     def get_log_state(self) -> Optional[Tuple]:
-        """Returns (r_DC_C, v_DC_C, dist_to_waypoint, in_capture_sphere) or None for RSO."""
+        """Returns (r_DC_C, v_DC_C, dist_to_waypoint, in_phase3_range) or None for RSO."""
         if "RSO" in self.satellite.name:
             return None
 
@@ -118,9 +130,9 @@ class WaypointPhaseDataStore(DataStore):
         v_DC_C = CN @ (v_insp_N - v_rso_N)  # approx: ignores omega×r Coriolis term
 
         dist_to_waypoint = float(np.linalg.norm(r_DC_C - _WAYPOINT_B))
-        in_capture_sphere = dist_to_waypoint < WAYPOINT_CAPTURE_RADIUS
+        in_phase3_range = float(np.linalg.norm(r_DC_C)) < PHASE_TRANSITION_RANGE
 
-        return (r_DC_C, v_DC_C, dist_to_waypoint, in_capture_sphere)
+        return (r_DC_C, v_DC_C, dist_to_waypoint, in_phase3_range)
 
     def compare_log_states(self, old_state: Any, new_state: Any) -> WaypointPhaseData:
         # Guard: RSO or first step after reset
@@ -130,7 +142,8 @@ class WaypointPhaseDataStore(DataStore):
         _old_r, _old_v, _old_d, _old_in = old_state
         new_r, new_v, new_d, new_in = new_state
 
-        # Fires exactly once per episode — when the agent first enters the sphere
+        # Fires exactly once per episode — when the agent first crosses PHASE_TRANSITION_RANGE
+        # (Phase 2 → 3). Internal flag: 0 = Phases 1–2, 1 = Phase 3.
         is_transition = new_in and not self._ever_captured
         if new_in:
             self._ever_captured = True
@@ -152,11 +165,11 @@ class WaypointPhaseDataStore(DataStore):
 
 class WaypointPhaseReward(GlobalReward):
     """
-    Replaces RelativeRangeLogReward with a two-phase body-frame reward.
+    Replaces RelativeRangeLogReward with a body-frame reward over all three phases.
 
-    Reward function is log-MSE in both phases, matching the existing style of
-    RelativeRangeLogReward.  The velocity penalty is proximity-scaled in Phase 0
-    and always-on in Phase 1.
+    Reward function is log-MSE in every phase, matching the existing style of
+    RelativeRangeLogReward.  The velocity penalty is off in Phase 1, proximity-scaled
+    in Phase 2, and always-on in Phase 3.
     """
     data_store_type = WaypointPhaseDataStore
 
@@ -180,7 +193,7 @@ class WaypointPhaseReward(GlobalReward):
 
             if data.phase == 0:
                 # ----------------------------------------------------------
-                # Phase 0: pull toward the 30 m body-fixed standoff waypoint
+                # Phases 1–2: pull toward the 30 m body-fixed standoff waypoint
                 # ----------------------------------------------------------
                 pos_error = r - _WAYPOINT_B
                 dist = data.dist_to_waypoint
@@ -188,29 +201,29 @@ class WaypointPhaseReward(GlobalReward):
                 # Position: normalise each component by the max approach range
                 pos_norm = pos_error / MAX_REL_POS  # shape (3,)
 
-                # Velocity: braking curve — zero when far, ramps to full at waypoint
+                # Velocity: braking curve — zero in Phase 1, ramps to full at waypoint in Phase 2
                 prox = float(np.clip(1.0 - dist / vel_onset_range, 0.0, 1.0))
                 vel_norm = (v / VEL_NORM) * vel_weight_phase0 * prox  # shape (3,)
 
             else:
                 # ----------------------------------------------------------
-                # Phase 1: pull toward docking port (RSO body-frame origin)
+                # Phase 3: pull toward docking port (RSO body-frame origin)
                 # ----------------------------------------------------------
-                # Normalise position by STANDOFF_DISTANCE so the agent sees a
-                # [0, 1] gradient across the full Phase 1 range.
-                pos_norm = r / STANDOFF_DISTANCE  # shape (3,)
+                # Normalise position by PHASE_TRANSITION_RANGE so the agent sees a
+                # [0, 1] gradient across the full Phase 3 range.
+                pos_norm = r / PHASE_TRANSITION_RANGE  # shape (3,)
 
                 # Velocity: always-on, stronger weight
                 vel_norm = (v / VEL_NORM) * vel_weight_phase1  # shape (3,)
 
             state = np.concatenate([pos_norm, vel_norm])
             mse = float(np.mean(state ** 2))
-            dense_reward = waypoint_pos_weight * np.log(mse + 1e-8)
+            dense_reward = -waypoint_pos_weight * np.log(mse + 1e-8)
 
-            # One-time sparse bonus on the step the agent first enters Phase 1,
-            # scaled by how close the capture point is to the boresight axis through
-            # the waypoint center.  Transverse offset 0 → full reward; offset at
-            # WAYPOINT_CAPTURE_RADIUS → 0 reward (glancing edge hit).
+            # One-time sparse bonus on the step the agent first enters Phase 3,
+            # scaled by how close the entry point is to the docking port boresight axis.
+            # Transverse offset 0 → full reward; offset ≥ WAYPOINT_CAPTURE_RADIUS → 0
+            # reward (≈19.5° off-axis at a 30 m transition range).
             if data.is_phase_transition:
                 error = data.r_DC_C - _WAYPOINT_B
                 transverse = error - np.dot(error, _BORESIGHT) * _BORESIGHT
@@ -224,7 +237,8 @@ class WaypointPhaseReward(GlobalReward):
 
             if data.is_phase_transition:
                 logger.info(
-                    f"WAYPOINT CAPTURED by {sat_id}: "
+                    f"PHASE 3 (TERMINAL INGRESS) ENTERED by {sat_id}: "
+                    f"range={np.linalg.norm(r):.1f}m, "
                     f"d_wp={data.dist_to_waypoint:.1f}m, "
                     f"|v|={np.linalg.norm(v):.3f}m/s, "
                     f"transverse_offset={transverse_dist:.1f}m, "
