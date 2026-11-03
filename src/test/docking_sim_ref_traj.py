@@ -127,7 +127,7 @@ class InferenceEnv(Sb3BksEnv):
             self._waypoint_capture_dist = dist_to_waypoint
 
         # ----------------------------------------------------------------------------
-        # METRIC 2: Sun Angle (angle between inspector→RSO and inspector→Sun vectors)
+        # METRIC 2: Sun Angle (solar phase angle Sun–RSO–Inspector; matches IlluminationReward)
         # ----------------------------------------------------------------------------
         try:
             world = self.env.simulator.world
@@ -140,7 +140,7 @@ class InferenceEnv(Sb3BksEnv):
             if dist_rso > 1e-6 and dist_sun > 1e-6:
                 rho_hat = r_insp_to_rso / dist_rso
                 sun_hat = r_insp_to_sun / dist_sun
-                cos_sun = np.clip(np.dot(rho_hat, sun_hat), -1.0, 1.0)
+                cos_sun = np.clip(-np.dot(rho_hat, sun_hat), -1.0, 1.0)
                 sun_angle_deg = float(np.degrees(np.arccos(cos_sun)))
             else:
                 sun_angle_deg = 0.0

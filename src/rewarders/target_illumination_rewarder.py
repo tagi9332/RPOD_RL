@@ -90,7 +90,10 @@ class IlluminationReward(GlobalReward):
                         rho_hat = r_dep_chf_N / rel_range
                         sun_hat = r_dep_sun_N / dist_to_sun
                         
-                        cos_phase_angle = np.clip(np.dot(rho_hat, sun_hat), -1.0, 1.0)
+                        # Solar phase angle (Sun–RSO–Inspector). The Sun is effectively at infinity,
+                        # so RSO→Sun ≈ Inspector→Sun and cos(phase) = (RSO→Inspector)·(Sun dir) = -ρ̂·ŝ.
+                        # Small phase angle → Sun behind the Inspector → RSO face is sunlit.
+                        cos_phase_angle = np.clip(-np.dot(rho_hat, sun_hat), -1.0, 1.0)
                         
                         if cos_phase_angle >= self.cos_limit:
                             # Inside the acceptable lighting cone: give flat positive reward
